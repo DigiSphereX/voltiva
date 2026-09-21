@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.0.5 - 2026-09-21
+
+- All screenshots regenerated with the **native Windows renderer** (they are no
+  longer captured with the offscreen QPA plugin, which produced distorted fonts).
+
 ## 1.0.4 - 2026-09-21
 
 - **English by default**: the interface now defaults to English on first run
