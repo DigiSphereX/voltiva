@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.0.4 - 2026-09-21
+
+- **English by default**: the interface now defaults to English on first run
+  (Arabic and the other 8 languages remain selectable anytime).
+- Screenshots regenerated in English covering **all pages and key dialogs**
+  (dashboard, new invoice, invoices, verify, review, analytics, tariffs,
+  subscribers, settings + tariff/subscriber/OCR-import dialogs, dark variant).
+- Tariffs list shows the localized name (English unless the UI is Arabic);
+  demo tariff names are fully English.
+
 ## 1.0.3 - 2026-09-21
 
 - Tariff dialog: the rate-per-kWh tier table and the fees table now have

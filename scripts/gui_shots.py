@@ -34,7 +34,7 @@ def _dialogs(ctx, win, app, tag: str) -> None:
         dlg.show()
         app.processEvents()
         _grab(dlg, f"dialog-{name}-{tag}.png")
-        dlg.close()
+        dlg.hide()
 
     nb = tariffs.TariffDialog(ctx, None, win)
     nb.resize(620, 700)
@@ -42,7 +42,7 @@ def _dialogs(ctx, win, app, tag: str) -> None:
     app.processEvents()
     nb.grab().save(os.path.join(OUT, f"dialog-tariff-narrow-{tag}.png"))
     print("saved", f"dialog-tariff-narrow-{tag}.png")
-    nb.close()
+    nb.hide()
 
 
 def main() -> int:
@@ -54,7 +54,7 @@ def main() -> int:
     app.setFont(QFont("Cairo", 10))
 
     db = os.path.join(tempfile.mkdtemp(), "shot.db")
-    ctx = AppContext(db, lang="ar")
+    ctx = AppContext(db, lang="en")
     seed(ctx.conn, overwrite=True)
     ctx.conn.commit()
 

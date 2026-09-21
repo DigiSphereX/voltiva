@@ -133,7 +133,7 @@ class AppContext:
             stored = ""
         if stored in ("auto",) + I18n.AVAILABLE_LANGS:
             return stored
-        return "auto"
+        return I18n.DEFAULT
 
     def current_currency_pref(self) -> str:
         """Persisted currency preference: "auto" or a currency code (migrates the legacy "currency" key)."""

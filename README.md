@@ -1,7 +1,7 @@
 # Voltiva — Smart Electricity Billing
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-0070BA)](https://www.paypal.com/donate/?hosted_button_id=CFANQH892RPH2)
-![Version](https://img.shields.io/badge/version-1.0.3-blue)
+![Version](https://img.shields.io/badge/version-1.0.4-blue)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.5+-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -58,11 +58,21 @@ local SQLite database — no cloud, no accounts, fully offline.
 
 ## Screenshots
 
+All pages and key dialogs (English UI; a dark dashboard variant is included):
+
 ![Dashboard](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/dashboard.png)
+![New invoice](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/new-invoice.png)
 ![Invoices](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/invoices.png)
-![Tariffs](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/tariffs.png)
+![Verify](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/verify.png)
+![Monthly review](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/review.png)
 ![Analytics](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/analytics.png)
+![Tariffs](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/tariffs.png)
+![Subscribers](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/subscribers.png)
 ![Settings](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/settings.png)
+![Dashboard (dark)](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/dashboard-dark.png)
+![Tariff dialog](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/tariff-dialog.png)
+![Subscriber dialog](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/subscriber-dialog.png)
+![OCR import dialog](https://raw.githubusercontent.com/DigiSphereX/voltiva/main/ScreenShot/import-dialog.png)
 
 ## How it works
 

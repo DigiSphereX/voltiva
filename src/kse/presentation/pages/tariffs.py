@@ -216,7 +216,7 @@ class TariffDialog(QDialog):
     def _save(self) -> None:
         try:
             schedule = self._schedule or TariffSchedule()
-            schedule.name_ar = self.name_ar.text().strip() or "تعريفة"
+            schedule.name_ar = self.name_ar.text().strip() or "Tariff"
             schedule.name_en = self.name_en.text().strip()
             schedule.subscriber_type = self.type_combo.currentData()
             schedule.method = self.method_combo.currentData()
@@ -273,11 +273,15 @@ class TariffsPage(QWidget):
         new_btn.clicked.connect(lambda: self._edit(None))
         self.table.itemDoubleClicked.connect(self._edit_selected)
 
+    def _localized_name(self, s: TariffSchedule) -> str:
+        """Show the Arabic name for the Arabic UI, the English name everywhere else."""
+        return s.name_ar if self.app.i18n.lang == "ar" else (s.name_en or s.name_ar)
+
     def refresh(self) -> None:
         schedules = self.app.tariffs.list(include_inactive=True)
         self.table.setRowCount(len(schedules))
         for r, s in enumerate(schedules):
-            self.table.setItem(r, 0, QTableWidgetItem(s.name_ar))
+            self.table.setItem(r, 0, QTableWidgetItem(self._localized_name(s)))
             self.table.setItem(r, 1, QTableWidgetItem(self.app.i18n.enum_label(s.subscriber_type)))
             self.table.setItem(r, 2, QTableWidgetItem(self.app.i18n.enum_label(s.method)))
             self.table.setItem(r, 3, QTableWidgetItem(s.version))

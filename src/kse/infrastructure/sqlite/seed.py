@@ -37,7 +37,7 @@ DEMO_INVOICE_PREFIX = "SAMPLE-"
 DEMO_VERSION_SUFFIX = "/demo"
 
 SETTING_KEYS = {
-    "language": "ar",
+    "language": "en",
     "theme": "dark",
     "db_path": "",
     "seeded": "1",
@@ -46,7 +46,7 @@ SETTING_KEYS = {
 
 def build_sample_schedules() -> list[TariffSchedule]:
     flat = TariffSchedule(
-        name_ar="مرجع منزلي 2024 (نموذج تجريبي)",
+        name_ar="Residential Reference 2024 (Demo)",
         name_en="Residential Reference 2024 (Demo)",
         subscriber_type=SubscriberType.RESIDENTIAL,
         method=TariffMethod.FLAT,
@@ -62,7 +62,7 @@ def build_sample_schedules() -> list[TariffSchedule]:
     flat.tiers = [TariffTier(tier_no=1, from_kwh=Decimal("0"), to_kwh=None, rate_per_kwh=Decimal("10"))]
 
     prog = TariffSchedule(
-        name_ar="شرائح تجاري 2024 (نموذج تجريبي)",
+        name_ar="Commercial Tiers 2024 (Demo)",
         name_en="Commercial Tiers 2024 (Demo)",
         subscriber_type=SubscriberType.COMMERCIAL,
         method=TariffMethod.PROGRESSIVE,
