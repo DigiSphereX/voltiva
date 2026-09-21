@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.benchmarks/
+.venv/
+venv/
+dist/
+build/
+*.spec
+
+# Logs / debug artifacts
+*.log
+shots*.log
+smoke*.log
+audit*.log
+
+# Local data
+.kahraba_smart/
+
+# Rendered screenshots (regenerated)
+scripts/shots/
+
+# Internal design documents (not part of the published product)
+docs/
+Iraqi_Electricity_Billing_Engine_Prompt.md
+KahrabaSmart_OCR_Config.md
+CamScanner 09-14-2026 13.03.jpg

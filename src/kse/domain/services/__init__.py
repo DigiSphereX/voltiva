@@ -1,0 +1,1 @@
+"""Pure-domain calculation engines. No I/O, no UI, fully deterministic."""

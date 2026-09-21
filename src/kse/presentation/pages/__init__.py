@@ -1,0 +1,1 @@
+"""UI pages for the KahrabaSmart desktop app."""
