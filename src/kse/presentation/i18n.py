@@ -4451,7 +4451,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "app_name": "Voltiva",
         "app_tagline": "智能电费账单",
         "app_title": "Voltiva — 电费账单管理器",
-        "about_text": "Voltiva — 智能电费账单（v1.0.0）\n用于记录、审查、比较和核验电费账单的国际工具。",
+        "about_text": "Voltiva — 智能电费账单\n用于记录、审查、比较和核验电费账单的国际工具。",
         "dash_hero_greet": "欢迎使用 Voltiva",
         "dash_hero_sub": "您的电费账单集中在一个地方 —— 审查、比较并发现任何计价差异。",
         "dash_new_invoice": "新建账单",
