@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 
 from .currencies import CURRENCIES
 from .i18n import I18n, LANG_NAMES
-from .. import __author__, __url__, __version__
+from .. import __author__, __copyright__, __url__, __version__
 
 
 def _theme_icon(name: str) -> str:
@@ -133,6 +133,7 @@ class TopBar(QFrame):
             self.tr("about_text")
             + f"\n\nVersion {__version__}\n"
             + f"Developed by {__author__}\n"
+            + f"{__copyright__}\n"
             + f"{__url__}\n"
             + "Donate: https://www.paypal.com/donate/?hosted_button_id=CFANQH892RPH2"
         )

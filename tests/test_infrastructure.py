@@ -123,8 +123,8 @@ class TestSeed:
         seed(conn, overwrite=True)
         repos = build_repositories(conn)
         invoices = repos["invoices"].list_recent()
-        assert len(invoices) >= 1
-        sample = invoices[0]
+        assert len(invoices) >= 4
+        sample = next(inv for inv in invoices if inv.invoice_no == "SAMPLE-2024-0001")
         assert sample.consumption_kwh == Decimal("3584")
         assert sample.total_due == Money.of(35840)
         assert sample.comparison_status == "MATCH"

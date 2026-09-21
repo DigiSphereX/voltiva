@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.0.2 - 2026-09-21
+
+- **English demo data**: the Settings button now loads a fully fictional English
+  sample (2 tariff schedules, 4 subscribers with meters, 4 self-verifying
+  invoices, including the tiered commercial case). Reloading only replaces the
+  demo set — your own records are never touched.
+- The demo step asks for confirmation first and the dashboard refreshes
+  immediately afterwards.
+- Copyright updated to `Copyright (c) 2026 M. Basheer (DigiSphereX)` and now
+  shown in the About boxes, matching the other published projects.
+- New **`Voltiva.exe`** launcher: double-click to start the app, shows the
+  Voltiva icon and opens no console window.
+
 ## 1.0.1 - 2026-09-21
 
 - Rebranded to the worldwide product name **Voltiva** and removed all

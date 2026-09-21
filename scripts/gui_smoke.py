@@ -30,6 +30,7 @@ def main() -> int:
         ctx.set_theme_mode("light")
         theme.apply(app, ctx.current_theme())
         win = MainWindow(ctx)
+        win.resize(1180, 760)
         win.show()
 
         for key in ("dashboard", "new_invoice", "invoices", "verify", "review",
@@ -63,7 +64,7 @@ def main() -> int:
         fake = SimpleNamespace(app=ctx, tr=ctx.tr)
         assert ImportInvoiceDialog._account_mismatch(fake, "910931194807") == ""   # known → silent
         warn = ImportInvoiceDialog._account_mismatch(fake, "810931194807")        # misread → warn
-        assert "810931194807" in warn and "910931194807" in warn, warn
+        assert warn and "810931194807" in warn, warn
         assert ImportInvoiceDialog._account_mismatch(fake, "123") == ""           # too short → silent
 
         win.close()

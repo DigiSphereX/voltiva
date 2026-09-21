@@ -1,7 +1,7 @@
 # Voltiva — Smart Electricity Billing
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-0070BA)](https://www.paypal.com/donate/?hosted_button_id=CFANQH892RPH2)
-![Version](https://img.shields.io/badge/version-1.0.1-blue)
+![Version](https://img.shields.io/badge/version-1.0.2-blue)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.5+-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -28,6 +28,9 @@ verifiable, and the rules can be updated without editing code.
   discrepancies.
 - **Print / PDF export** — professional printable documents with full RTL
   Arabic support; no extra libraries required.
+- **English demo data** — one click in Settings loads a fully fictional English
+  sample (2 tariffs, 4 subscribers, 4 self-verifying invoices) so you can
+  explore every screen before entering your own records.
 - **Worldwide-ready** — 9 interface languages, automatic language/currency
   detection, Arabic and Western digit styles, dark/light/auto themes.
 
@@ -40,7 +43,10 @@ Requires **Python 3.12+** with **PyQt6 6.5+** (and optionally `pytesseract` +
 run_kahraba.bat
 ```
 
-or:
+or double-click **`Voltiva.exe`** — the application launcher with the Voltiva
+icon (no console window opens).
+
+or, from a terminal:
 
 ```powershell
 pythonw.exe run.py

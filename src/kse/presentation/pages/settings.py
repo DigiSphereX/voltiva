@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ...infrastructure.sqlite.seed import seed
-from ... import __author__, __url__, __version__
+from ... import __author__, __copyright__, __url__, __version__
 from ..currencies import CURRENCIES
 from ..widgets import danger_small_button, small_button, error_text
 
@@ -69,6 +69,7 @@ class SettingsPage(QWidget):
         about.setText(
             self.tr("about_text")
             + f"\n\nVersion {__version__}  |  Developed by {__author__}\n"
+            + f"{__copyright__}\n"
             + f"{__url__}\n"
             + "Donate: https://www.paypal.com/donate/?hosted_button_id=CFANQH892RPH2")
         about.setObjectName("Muted")
@@ -196,9 +197,16 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, self.tr("error"), error_text(self.app, exc))
 
     def _seed(self) -> None:
+        answer = QMessageBox.question(
+            self, self.tr("st_seed"), self.tr("st_seed_confirm"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
         try:
             seed(self.app.conn, overwrite=True)
             self.app.conn.commit()
-            QMessageBox.information(self, self.tr("success"), self.tr("st_seed"))
+            self.app.notify_refresh()
+            QMessageBox.information(self, self.tr("success"), self.tr("st_seed_done"))
         except Exception as exc:
             QMessageBox.warning(self, self.tr("error"), error_text(self.app, exc))
