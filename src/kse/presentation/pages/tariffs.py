@@ -7,7 +7,7 @@ from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFormLayout,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ...domain.enums import ChargeCategory, DataSource, ServiceZone, SubscriberType, TariffMethod
@@ -71,6 +71,8 @@ class TariffDialog(QDialog):
             self.tr("tf_col_from"), self.tr("tf_col_to"), self.tr("tf_col_rate")])
         self.tiers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.tiers_table.verticalHeader().setDefaultSectionSize(36)
+        self.tiers_table.setMinimumHeight(180)
+        self.tiers_table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         self.add_tier_btn = small_button(self.tr("tf_add_tier"))
         self.add_tier_btn.setToolTip(self.tr("tt_tf_add_tier"))
         self.remove_tier_btn = small_button(self.tr("tf_remove_row"))
@@ -81,6 +83,8 @@ class TariffDialog(QDialog):
         self.fees_table.setColumnCount(3)
         self.fees_table.setHorizontalHeaderLabels([
             self.tr("iv_col_name"), self.tr("iv_col_type"), self.tr("iv_col_amount")])
+        self.fees_table.setMinimumHeight(140)
+        self.fees_table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
         self.add_fee_btn = small_button(self.tr("tf_add_fee"))
         self.add_fee_btn.setToolTip(self.tr("tt_tf_add_fee"))
         self.remove_fee_btn = small_button(self.tr("tf_remove_row"))
@@ -105,7 +109,10 @@ class TariffDialog(QDialog):
         form.addRow(self.tr("tf_source_detail"), self.source_detail)
         form.addRow(self.tr("tf_is_active"), self.is_active)
 
-        layout = QVBoxLayout(self)
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         layout.addLayout(form)
         layout.addWidget(QLabel(self.tr("tf_rate_per_kwh")))
         layout.addWidget(self.tiers_table)
@@ -115,7 +122,16 @@ class TariffDialog(QDialog):
         layout.addWidget(self.fees_table)
         layout.addWidget(self.add_fee_btn)
         layout.addWidget(self.remove_fee_btn)
-        layout.addWidget(buttons)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(body)
+        scroll.setMinimumHeight(560)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
+        root.addWidget(buttons)
 
         self.add_tier_btn.clicked.connect(self._add_tier_row)
         self.add_fee_btn.clicked.connect(self._add_fee_row)

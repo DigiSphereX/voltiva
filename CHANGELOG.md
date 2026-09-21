@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.0.3 - 2026-09-21
+
+- Tariff dialog: the rate-per-kWh tier table and the fees table now have
+  dedicated height (four or more rows stay visible) and the whole form scrolls
+  on small screens, so none of the add tables is squeezed.
+
 ## 1.0.2 - 2026-09-21
 
 - **English demo data**: the Settings button now loads a fully fictional English
