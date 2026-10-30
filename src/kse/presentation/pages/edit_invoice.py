@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import datetime as dt
 
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import (
-    QComboBox, QDateEdit, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QVBoxLayout, QWidget,
+    QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
+    QVBoxLayout, QWidget,
 )
 
 from ...domain.enums import PaymentStatus
 from ...domain.money import Money
-from ..widgets import MoneyEdit, primary_button, error_label, error_text
+from ..widgets import (
+    MoneyEdit, date_edit, error_label, error_text, form_label, ghost_button, primary_button,
+)
 
 
 class InvoiceEditDialog(QDialog):
@@ -26,17 +28,14 @@ class InvoiceEditDialog(QDialog):
         hint.setWordWrap(True)
         hint.setObjectName("Muted")
 
-        self.issue_date = QDateEdit()
+        self.issue_date = date_edit()
         self.issue_date.setToolTip(self.tr("tt_ed_issue_date"))
-        self.issue_date.setCalendarPopup(True)
         self.issue_date.setDate(QDate(invoice.issue_date.year, invoice.issue_date.month, invoice.issue_date.day))
-        self.prev_date = QDateEdit()
-        self.prev_date.setCalendarPopup(True)
+        self.prev_date = date_edit()
         if invoice.previous_read_date:
             self.prev_date.setDate(QDate(invoice.previous_read_date.year, invoice.previous_read_date.month,
                                          invoice.previous_read_date.day))
-        self.curr_date = QDateEdit()
-        self.curr_date.setCalendarPopup(True)
+        self.curr_date = date_edit()
         if invoice.current_read_date:
             self.curr_date.setDate(QDate(invoice.current_read_date.year, invoice.current_read_date.month,
                                          invoice.current_read_date.day))
@@ -54,21 +53,32 @@ class InvoiceEditDialog(QDialog):
 
         save_btn = primary_button(self.tr("save_edits"))
         save_btn.setToolTip(self.tr("tt_ed_save"))
-        cancel_btn = QPushButton(self.tr("cancel"))
+        cancel_btn = ghost_button(self.tr("cancel"))
         buttons = QHBoxLayout()
-        buttons.addWidget(save_btn)
-        buttons.addWidget(cancel_btn)
+        buttons.setSpacing(8)
         buttons.addStretch(1)
+        buttons.addWidget(cancel_btn)
+        buttons.addWidget(save_btn)
 
         form = QFormLayout()
-        form.addRow(self.tr("issue_date"), self.issue_date)
-        form.addRow(self.tr("ni_prev_date"), self.prev_date)
-        form.addRow(self.tr("ni_curr_date"), self.curr_date)
-        form.addRow(self.tr("vk_official"), self.official_amount)
-        form.addRow(self.tr("il_notes"), self.notes)
-        form.addRow(self.tr("payment_status"), self.payment_status)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        for label, widget in (
+            (self.tr("issue_date"), self.issue_date),
+            (self.tr("ni_prev_date"), self.prev_date),
+            (self.tr("ni_curr_date"), self.curr_date),
+            (self.tr("vk_official"), self.official_amount),
+            (self.tr("il_notes"), self.notes),
+            (self.tr("payment_status"), self.payment_status),
+        ):
+            form.addRow(form_label(label, 130), widget)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 18, 22, 16)
+        layout.setSpacing(14)
         layout.addWidget(hint)
         layout.addLayout(form)
         layout.addWidget(self.err_lbl)
@@ -92,7 +102,17 @@ class InvoiceEditDialog(QDialog):
             invoice.current_read_date = self.curr_date.date().toPyDate()
             invoice.official_amount = self.official_amount.money()
             invoice.notes = self.notes.text().strip()
-            invoice.payment_status = self.payment_status.currentData()
+            status = self.payment_status.currentData()
+            paid, due = invoice.paid_amount.raw, invoice.total_due.raw
+            expected = (PaymentStatus.PAID if due > 0 and paid >= due
+                        else PaymentStatus.UNPAID if paid <= 0
+                        else PaymentStatus.PARTIAL)
+            if status != expected:
+                # Status must follow the money actually recorded (see PaymentDialog).
+                self.err_lbl.setText(self.tr("ed_payment_status_mismatch"))
+                self.err_lbl.setVisible(True)
+                return
+            invoice.payment_status = status
 
             reading = self.app.repos["invoices"].list_reading(invoice.id)
             if reading:

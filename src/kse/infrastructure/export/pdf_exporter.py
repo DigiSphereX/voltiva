@@ -16,6 +16,14 @@ def _esc(text) -> str:
     return str(text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _safe_format(template: str, **kwargs) -> str:
+    """str.format that survives stray braces / unknown fields in a translated footer."""
+    try:
+        return template.format(**kwargs)
+    except (KeyError, IndexError, ValueError):
+        return template
+
+
 def _money(m: Money | None, code: str) -> str:
     if m is None:
         return "—"
@@ -71,9 +79,9 @@ def build_invoice_html(
         row(tr("iv_curr_reading"), f"{fmt_quantity(invoice.current_reading)} kWh"),
         row(tr("iv_consumption"), f"{fmt_quantity(invoice.consumption_kwh)} kWh"),
         row(tr("iv_adjusted"), f"{fmt_quantity(invoice.adjusted_kwh)} kWh"),
-        row(tr("ni_prev_date"), _esc(invoice.previous_read_date or "")),
-        row(tr("ni_curr_date"), _esc(invoice.current_read_date or "")),
-        row(tr("issue_date"), _esc(invoice.issue_date)),
+        row(tr("ni_prev_date"), invoice.previous_read_date or ""),
+        row(tr("ni_curr_date"), invoice.current_read_date or ""),
+        row(tr("issue_date"), invoice.issue_date),
         header(tr("pdf_financial_header")),
         row(tr("iv_energy"), _money(invoice.energy_cost, code)),
     ]
@@ -103,9 +111,60 @@ def build_invoice_html(
         f"{invoice.tariff_name or '—'} (نسخة {invoice.tariff_version or '—'})")
     parts.append(
         f"<p style='margin-top:24px;color:#6b7280;font-size:10px'>"
-        f"{_esc(footer.format(date=dt.date.today().isoformat(), tariff=invoice.tariff_name or '—', version=invoice.tariff_version or '—'))}</p>"
+        f"{_esc(_safe_format(footer, date=dt.date.today().isoformat(), tariff=invoice.tariff_name or '—', version=invoice.tariff_version or '—'))}</p>"
     )
     parts.append("</body></html>")
+    return "".join(parts)
+
+
+def build_receipt_html(invoice: Invoice, payment, *, lang: str = "ar", i18n=None,
+                       currency: str | None = None) -> str:
+    """Printable payment receipt (one payment) in any UI language.
+
+    Shows what was paid now, the invoice total, everything paid so far and the remaining balance
+    (values come from the stored invoice, so a receipt always matches the books).
+    """
+    tr = i18n.tr if i18n is not None else (lambda k, **kw: k)
+    code = currency or CURRENCY_AR
+    dir_attr = "rtl" if lang == "ar" else "ltr"
+    align = "left" if lang == "ar" else "right"
+    method_key = f"pay_method_{str(payment.method).lower()}"
+    method = tr(method_key) if i18n is not None and tr(method_key) != method_key else str(payment.method)
+    remaining = invoice.total_due - invoice.paid_amount
+
+    def row(label, value, bold=False):
+        fw = "font-weight:bold;" if bold else ""
+        return (f"<tr><td style='padding:7px;color:#6b7280'>{_esc(label)}</td>"
+                f"<td style='padding:7px;{fw}text-align:{align}'>{_esc(value)}</td></tr>")
+
+    receipt_no = f"R-{payment.id:06d}" if payment.id else "R-------"
+    parts = [
+        f"<html><head><meta charset='utf-8'></head><body dir='{dir_attr}' "
+        "style='font-family:\"Segoe UI\",\"Tahoma\";color:#111827'>",
+        "<div style='text-align:center;border-bottom:3px solid #0b7a52;padding-bottom:8px'>",
+        f"<h2 style='margin:0;color:#0b7a52'>{_esc(tr('app_name') if i18n is not None else 'Voltiva')}</h2>",
+        f"<div style='color:#6b7280'>{_esc(tr('rc_title'))} — {_esc(receipt_no)}</div></div>",
+        "<table width='100%' style='border-collapse:collapse;font-size:14px;margin-top:10px'>",
+        row(tr("rc_date"), payment.paid_at),
+        row(tr("iv_subscriber"), invoice.subscriber_name),
+        row(tr("iv_account"), invoice.account_no),
+        row(tr("iv_no"), invoice.invoice_no),
+        row(tr("pay_method"), method),
+        row(tr("rc_amount"), _money(payment.amount, code), bold=True),
+        row(tr("iv_total_due"), _money(invoice.total_due, code)),
+        row(tr("rc_paid_total"), _money(invoice.paid_amount, code)),
+        row(tr("rc_remaining"), _money(remaining, code), bold=True),
+    ]
+    if payment.notes:
+        parts.append(row(tr("pay_notes"), payment.notes))
+    parts += [
+        "</table>",
+        "<table width='100%' style='margin-top:48px;font-size:12px;color:#6b7280'><tr>",
+        f"<td width='50%' style='border-top:1px solid #9ca3af;padding-top:4px'>{_esc(tr('rc_payer'))}</td>",
+        "<td width='6%'></td>",
+        f"<td width='44%' style='border-top:1px solid #9ca3af;padding-top:4px'>{_esc(tr('rc_receiver'))}</td>",
+        "</tr></table></body></html>",
+    ]
     return "".join(parts)
 
 

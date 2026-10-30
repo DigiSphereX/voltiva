@@ -1,0 +1,11 @@
+# Runtime dependencies. Compatible-release ranges (not exact pins) so a security update of a
+# library is not blocked, while a new MAJOR version cannot silently change behaviour.
+PyQt6>=6.5,<7
+openpyxl>=3.1,<4
+Pillow>=10.0,<13
+numpy>=1.26,<3
+
+# Optional: invoice OCR (also needs the Tesseract binary with the `ara` and `eng` languages)
+pytesseract>=0.3.10,<0.4
+arabic-reshaper>=3.0,<4
+python-bidi>=0.4.2,<1

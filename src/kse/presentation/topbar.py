@@ -14,24 +14,39 @@ from PyQt6.QtWidgets import (
 
 from .currencies import CURRENCIES
 from .i18n import I18n, LANG_NAMES
+from . import theme
 from .. import __author__, __copyright__, __url__, __version__
 
 
 def _theme_icon(name: str) -> str:
-    return "🌙" if name == "dark" else "☀️"
+    # text glyphs, not colour emoji: the bundled Cairo font has no emoji coverage
+    return "☾" if theme.is_dark(name) else "☀"
 
 
 class _CurrencyMenu(QMenu):
-    """Searchable currency picker (Automatic + code/name search over all currencies)."""
+    """Searchable currency picker (Automatic + code/name search over all currencies).
+
+    The ~170-row list is built on first open, not at start-up: constructing it
+    eagerly cost most of the top bar's initialisation time.
+    """
 
     def __init__(self, app, parent=None) -> None:
         super().__init__(parent)
         self.app = app
         self.setMinimumWidth(280)
+        self._built = False
 
-        self.auto_action = self.addAction(app.tr("st_auto"))
+    def prepare(self) -> None:
+        if self._built:
+            self.auto_action.setText(self.app.tr("st_auto"))
+            self.search.setPlaceholderText(self.app.tr("tb_currency_search_ph"))
+            self.auto_action.setChecked(self.app.current_currency_pref() == "auto")
+            return
+        self._built = True
+
+        self.auto_action = self.addAction(self.app.tr("st_auto"))
         self.auto_action.setCheckable(True)
-        self.auto_action.setChecked(app.current_currency_pref() == "auto")
+        self.auto_action.setChecked(self.app.current_currency_pref() == "auto")
         self.addSeparator()
 
         container = QWidget()
@@ -40,7 +55,7 @@ class _CurrencyMenu(QMenu):
         lay.setSpacing(4)
         self.search = QLineEdit()
         self.search.setObjectName("CurrencySearch")
-        self.search.setPlaceholderText(app.tr("tb_currency_search_ph"))
+        self.search.setPlaceholderText(self.app.tr("tb_currency_search_ph"))
         self.search.setClearButtonEnabled(True)
         self.list_ = QListWidget()
         self.list_.setMaximumHeight(280)
@@ -111,6 +126,16 @@ class TopBar(QFrame):
         self.theme_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         lay.addWidget(self.theme_btn)
 
+        self._lang_menu = QMenu(self)
+        self._lang_menu.aboutToShow.connect(self._populate_lang_menu)
+        self._theme_menu = QMenu(self)
+        self._theme_menu.aboutToShow.connect(self._populate_theme_menu)
+        self._cur_menu = _CurrencyMenu(self.app, self)
+        self._cur_menu.aboutToShow.connect(self._cur_menu.prepare)
+        self.lang_btn.setMenu(self._lang_menu)
+        self.cur_btn.setMenu(self._cur_menu)
+        self.theme_btn.setMenu(self._theme_menu)
+
         self.refresh()
 
     def _build_menu_bar(self) -> None:
@@ -139,10 +164,14 @@ class TopBar(QFrame):
         )
         QMessageBox.about(self, self.tr("app_name"), text)
 
-    def _build_lang_menu(self) -> QMenu:
-        menu = QMenu(self)
-        group = QActionGroup(self)
+    def _populate_lang_menu(self) -> None:
+        menu = self._lang_menu
+        menu.clear()
+        if getattr(self, "_lang_group", None) is not None:
+            self._lang_group.deleteLater()
+        group = QActionGroup(menu)
         group.setExclusive(True)
+        self._lang_group = group
         pref = self.app.current_language_pref()
         auto = menu.addAction(self.tr("st_auto"))
         auto.setCheckable(True)
@@ -156,37 +185,49 @@ class TopBar(QFrame):
             act.setChecked(pref != "auto" and self.app.effective_language() == code)
             act.triggered.connect(lambda _=False, c=code: self.app.set_language_pref(c))
             group.addAction(act)
-        return menu
 
-    def _build_theme_menu(self) -> QMenu:
-        menu = QMenu(self)
-        group = QActionGroup(self)
+    def _populate_theme_menu(self) -> None:
+        menu = self._theme_menu
+        menu.clear()
+        if getattr(self, "_theme_group", None) is not None:
+            self._theme_group.deleteLater()
+        group = QActionGroup(menu)
         group.setExclusive(True)
-        for mode, key in (("auto", "st_auto"), ("light", "st_light"), ("dark", "st_dark")):
-            act = menu.addAction(self.tr(key))
+        self._theme_group = group
+        pref = self.app.current_theme_mode()
+        auto = menu.addAction(self.tr("st_auto"))
+        auto.setCheckable(True)
+        auto.setChecked(pref == "auto")
+        auto.triggered.connect(lambda: self.app.set_theme_mode("auto"))
+        group.addAction(auto)
+        menu.addSeparator()
+        kind = ""
+        for name in theme.THEME_UI_ORDER:
+            if name == theme.THEME_AUTO:
+                continue
+            name_kind = theme.palette_kind(name)
+            if kind and name_kind != kind:
+                menu.addSeparator()
+            kind = name_kind
+            act = menu.addAction(
+                f"{_theme_icon(name)}  {self.tr(theme.THEME_LABEL_KEYS[name])}")
             act.setCheckable(True)
-            act.setChecked(self.app.current_theme_mode() == mode)
-            act.triggered.connect(lambda _=False, m=mode: self.app.set_theme_mode(m))
+            act.setChecked(pref == name)
+            act.triggered.connect(lambda _=False, n=name: self.app.set_theme_mode(n))
             group.addAction(act)
-        return menu
 
     def refresh(self) -> None:
         self._build_menu_bar()
         self.lang_btn.setText(self.app.effective_language().upper())
         self.cur_btn.setText(self.app.effective_currency())
         resolved = self.app.current_theme()
-        mode_text = self.tr("st_" + self.app.current_theme_mode())
+        mode = self.app.current_theme_mode()
+        mode_text = (self.tr("st_auto") if mode == theme.THEME_AUTO
+                     else self.tr(theme.THEME_LABEL_KEYS[mode]))
+        resolved_text = self.tr(theme.THEME_LABEL_KEYS[resolved])
         self.theme_btn.setText(f"{_theme_icon(resolved)} {mode_text}")
-        self.theme_btn.setToolTip(self.tr("tb_theme_tip"))
-        for old in getattr(self, "_menus", []):
-            old.deleteLater()
-        self._menus = []
-        lang_menu = self._build_lang_menu()
-        cur_menu = _CurrencyMenu(self.app, self)
-        theme_menu = self._build_theme_menu()
-        self.lang_btn.setMenu(lang_menu)
-        self.cur_btn.setMenu(cur_menu)
-        self.theme_btn.setMenu(theme_menu)
-        self._menus = [lang_menu, cur_menu, theme_menu]
+        self.theme_btn.setToolTip(
+            f"{self.tr('tb_theme_tip')} · {resolved_text}" if mode == theme.THEME_AUTO
+            else self.tr("tb_theme_tip"))
         self.setLayoutDirection(
             Qt.LayoutDirection.RightToLeft if self.app.i18n.rtl else Qt.LayoutDirection.LeftToRight)

@@ -20,6 +20,21 @@ CONSUMPTION_SCALE = 6    # consumption precision (supports multipliers)
 CURRENCY = "IQD"
 CURRENCY_AR = "د.ع"
 
+# Display-style flag ("Arabic-Indic digits + د.ع" vs "Western digits + ISO code").
+# It lives in the domain so the billing engine can label amounts WITHOUT importing
+# the Qt presentation layer (which made the engine, the seed data and most of the
+# test-suite impossible to run without PyQt6 installed).
+_ARABIC_DISPLAY = False
+
+
+def set_arabic_display(enabled: bool) -> None:
+    global _ARABIC_DISPLAY
+    _ARABIC_DISPLAY = bool(enabled)
+
+
+def is_arabic_display() -> bool:
+    return _ARABIC_DISPLAY
+
 getcontext().prec = 34
 
 
@@ -31,13 +46,19 @@ def _to_decimal(value) -> Decimal:
     return Decimal(str(value))
 
 
+# Built once: creating ``Decimal("1e-2")`` on every call dominated bulk loads
+# (each invoice row builds ~9 Money values). Rounding behaviour is unchanged.
+_MONEY_Q = Decimal("1e-{0}".format(MONEY_SCALE))
+_CONSUMPTION_Q = Decimal("1e-{0}".format(CONSUMPTION_SCALE))
+
+
 def round_money(value) -> Decimal:
     """Central rounding: half-up, MONEY_SCALE decimals."""
-    return _to_decimal(value).quantize(Decimal("1e-{0}".format(MONEY_SCALE)), rounding=ROUND_HALF_UP)
+    return _to_decimal(value).quantize(_MONEY_Q, rounding=ROUND_HALF_UP)
 
 
 def round_consumption(value) -> Decimal:
-    return _to_decimal(value).quantize(Decimal("1e-{0}".format(CONSUMPTION_SCALE)), rounding=ROUND_HALF_UP)
+    return _to_decimal(value).quantize(_CONSUMPTION_Q, rounding=ROUND_HALF_UP)
 
 
 def fmt_quantity(d: Decimal | int, max_scale: int = CONSUMPTION_SCALE) -> str:
@@ -120,9 +141,10 @@ class Money:
     __rmul__ = __mul__
 
     def __truediv__(self, other) -> "Money":
-        if other == 0:
+        divisor = _to_decimal(other)
+        if divisor == 0:
             raise ZeroDivisionError("division by zero")
-        return Money(self._raw / _to_decimal(other))
+        return Money(self._raw / divisor)
 
     def __neg__(self) -> "Money":
         return Money(-self._raw)
@@ -168,7 +190,12 @@ class Money:
     def from_db(cls, raw: str | None | Decimal) -> "Money":
         if raw is None or raw == "":
             return cls.zero()
-        return cls(_to_decimal(raw))
+        # Same value as ``cls(_to_decimal(raw))`` (Decimal parse + half-up quantize) without
+        # the two extra call layers: this runs ~9x per invoice row on every bulk load.
+        obj = cls.__new__(cls)
+        obj._raw = (Decimal(raw) if isinstance(raw, str) else _to_decimal(raw)).quantize(
+            _MONEY_Q, rounding=ROUND_HALF_UP)
+        return obj
 
     # ---- parsing helpers -----------------------------------------------
     @staticmethod
@@ -189,6 +216,11 @@ class Money:
         """Parse user input allowing Arabic-Indic digits, Arabic/ASCII separators."""
         if text is None:
             raise ValueError("no value")
+        # A typed minus sign used to be stripped silently, turning -500 into +500.
+        # Negative money is never a valid amount entry (discounts are a category).
+        raw_text = latin_digits(str(text)).strip()
+        if raw_text.startswith(("-", "−")):
+            raise ValueError("المبلغ لا يمكن أن يكون سالباً.")
         cleaned = Money._clean_input(text, integer_only=False)
         if cleaned == "":
             raise ValueError("no value")

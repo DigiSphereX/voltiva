@@ -208,3 +208,40 @@ class TestSubscriberService:
         svc.delete(s.id)
         assert svc.subscribers.get(s.id) is None
         assert repos["subscribers"].by_account("2000") is None
+
+class TestPeriodIntegrity:
+    def _req(self, **overrides):
+        params = dict(
+            subscriber_type=SubscriberType.RESIDENTIAL,
+            previous_reading="100",
+            current_reading="200",
+            previous_read_date=dt.date(2024, 2, 1),
+            current_read_date=dt.date(2024, 3, 1),
+        )
+        params.update(overrides)
+        return CalculateInvoiceRequest(**params)
+
+    def test_same_day_period_is_rejected(self, mem_db):
+        _, svc, _, _ = make_context(mem_db)
+        with pytest.raises(ValidationFailedError) as exc:
+            svc.calculate(self._req(previous_read_date=dt.date(2024, 3, 1)))
+        assert any(i.code == "DATE_NOT_AFTER" for i in exc.value.issues)
+
+    def test_verify_reports_same_day_instead_of_raising(self, mem_db):
+        _, svc, _, _ = make_context(mem_db)
+        result = svc.verify(self._req(previous_read_date=dt.date(2024, 3, 1)))
+        assert result.calc is None
+        assert any(i.code == "DATE_NOT_AFTER" for i in result.report.issues)
+
+    def test_save_without_explicit_dates_keeps_the_priced_period(self, mem_db):
+        _, svc, sub_svc, _ = make_context(mem_db)
+        sub = sub_svc.find_or_create("1201234567", name="مشترك")
+        calc, schedule = svc.calculate(self._req())
+        invoice = svc.save_calculation(calc, schedule, sub)
+        assert invoice.previous_read_date == dt.date(2024, 2, 1)
+        assert invoice.current_read_date == dt.date(2024, 3, 1)
+        reading = svc.invoices.list_reading(invoice.id)
+        assert reading.previous_date == dt.date(2024, 2, 1)
+        assert reading.current_date == dt.date(2024, 3, 1)
+        # recalculating must reuse the real period, not a fabricated same-day one
+        assert svc.recalculate(invoice.id).total_due == invoice.total_due

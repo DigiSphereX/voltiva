@@ -30,7 +30,7 @@ def main() -> int:
         ctx.set_theme_mode("light")
         theme.apply(app, ctx.current_theme())
         win = MainWindow(ctx)
-        win.resize(1180, 760)
+        win.resize(1300, 820)
         win.show()
 
         for key in ("dashboard", "new_invoice", "invoices", "verify", "review",
@@ -46,7 +46,13 @@ def main() -> int:
         ctx.set_theme("light")
         assert theme.colors()["bg"].lower() == "#f4f7fc"
 
-        # nav label present
+        # nav labels show when wide, collapse to icons when narrow
+        assert win._nav_buttons["review"].text() == "المراجعة الشهرية"
+        win.resize(1080, 660)
+        app.processEvents()
+        assert win._nav_buttons["review"].text() != "المراجعة الشهرية"
+        win.resize(1300, 820)
+        app.processEvents()
         assert win._nav_buttons["review"].text() == "المراجعة الشهرية"
         # i18n format smoke
         assert "910931194807" in ctx.tr("ocr_account_mismatch", account="12345", known="910931194807")

@@ -197,7 +197,7 @@ class Invoice:
     status: InvoiceStatus = InvoiceStatus.ACTIVE
     reading: Optional[InvoiceReading] = None
     charges: list[InvoiceCharge] = field(default_factory=list)
-    audit_run_id: Optional[int] = None
+    audit_run_id: Optional[str] = None    # UUID shared with the audit log (DB column is TEXT)
     id: Optional[int] = None
     created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(dt.timezone.utc))
     updated_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(dt.timezone.utc))
@@ -246,6 +246,6 @@ class AuditLogEntry:
     tariff_schedule_id: Optional[int] = None
     before_json: Optional[str] = None
     after_json: Optional[str] = None
-    run_id: Optional[int] = None
+    run_id: Optional[str] = None    # UUID of the calculation run (DB column is TEXT)
     id: Optional[int] = None
     created_at: dt.datetime = field(default_factory=lambda: dt.datetime.now(dt.timezone.utc))

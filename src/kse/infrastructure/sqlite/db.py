@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 
 def default_data_dir() -> Path:
@@ -34,6 +35,10 @@ def connect(db_path=None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA temp_store=MEMORY")
+    conn.execute("PRAGMA cache_size=-16000")  # ~16 MB page cache
+    conn.execute("PRAGMA trusted_schema=OFF")
     run_migrations(conn)
     return conn
 
@@ -265,19 +270,97 @@ MIGRATION_2_DDL = """
 ALTER TABLE TariffSchedules ADD COLUMN service_zone TEXT NOT NULL DEFAULT 'TRADITIONAL';
 """
 
+# Composite / partial indexes that match the app's hottest queries
+# (dashboard + analytics filter on status and order by issue_date; payments are
+# looked up per invoice; tariff lookups filter by active flag).
+MIGRATION_3_DDL = """
+CREATE INDEX IF NOT EXISTS ix_invoices_status_date ON Invoices(status, issue_date DESC, id DESC);
+CREATE INDEX IF NOT EXISTS ix_invoices_subscriber_date ON Invoices(subscriber_id, issue_date);
+CREATE INDEX IF NOT EXISTS ix_payments_paid_at ON Payments(paid_at);
+CREATE INDEX IF NOT EXISTS ix_tariff_active ON TariffSchedules(is_active, subscriber_type, effective_from);
+"""
+
+def _migration_4_unique_invoice_no(conn: sqlite3.Connection) -> None:
+    """Make invoice numbers unique.
+
+    Databases created by older versions may already contain duplicates (the old numbering
+    scanned only the latest 500 rows). A UNIQUE index would fail on them, so duplicates are
+    renumbered first: the OLDEST invoice keeps its number, later ones become
+    ``<no>-D2``, ``<no>-D3`` ... and every change is written to the audit log.
+    Empty numbers are excluded from the index.
+    """
+    dups = [r[0] for r in conn.execute(
+        "SELECT invoice_no FROM Invoices WHERE invoice_no <> '' "
+        "GROUP BY invoice_no HAVING COUNT(*) > 1")]
+    for number in dups:
+        ids = [r[0] for r in conn.execute(
+            "SELECT id FROM Invoices WHERE invoice_no=? ORDER BY id", (number,))]
+        for rid in ids[1:]:
+            n = 2
+            while True:
+                candidate = f"{number}-D{n}"
+                if not conn.execute("SELECT 1 FROM Invoices WHERE invoice_no=?", (candidate,)).fetchone():
+                    break
+                n += 1
+            conn.execute("UPDATE Invoices SET invoice_no=? WHERE id=?", (candidate, rid))
+            conn.execute(
+                "INSERT INTO AuditLogs (action, entity_type, entity_id, user, description, details_json,"
+                " invoice_id, created_at) VALUES ('MIGRATION_RENUMBER', 'INVOICE', ?, 'migration', ?, ?, ?,"
+                " datetime('now'))",
+                (rid, f"Duplicate invoice number {number} renumbered to {candidate}",
+                 '{"old": "%s", "new": "%s"}' % (number, candidate), rid))
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_invoices_invoice_no "
+                 "ON Invoices(invoice_no) WHERE invoice_no <> ''")
+
+
 MIGRATIONS = [
     (1, MIGRATION_1_DDL),
     (2, MIGRATION_2_DDL),
+    (3, MIGRATION_3_DDL),
+    (4, _migration_4_unique_invoice_no),
 ]
 
 
+_ADD_COLUMN_RE = re.compile(r"ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)", re.IGNORECASE)
+
+
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    return any(r[1] == column for r in conn.execute(f"PRAGMA table_info({table})"))
+
+
+def _apply_migration(conn: sqlite3.Connection, version: int, ddl: str) -> None:
+    """Apply one migration all-or-nothing.
+
+    ``executescript`` silently COMMITs first and is not transactional, so a crash
+    between the DDL and the ``schema_migrations`` insert used to leave a
+    half-migrated database (e.g. ``duplicate column name`` on the next start).
+    Statements are now run one by one inside an explicit transaction, and
+    ``ALTER TABLE ... ADD COLUMN`` is skipped when the column already exists.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if callable(ddl):                      # data migration written in Python
+            ddl(conn)
+        else:
+            for stmt in (s.strip() for s in ddl.split(";") if s.strip()):
+                m = _ADD_COLUMN_RE.match(stmt)
+                if m and _column_exists(conn, m.group(1), m.group(2)):
+                    continue  # already applied by an interrupted earlier run
+                conn.execute(stmt)
+        conn.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)", (version,))
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+
 def run_migrations(conn: sqlite3.Connection) -> None:
+    conn.commit()
     conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))")
     applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")}
     for version, ddl in MIGRATIONS:
         if version not in applied:
-            conn.executescript(ddl)
-            conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+            _apply_migration(conn, version, ddl)
     conn.commit()
 
 

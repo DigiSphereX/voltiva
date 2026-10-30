@@ -42,6 +42,55 @@ class DebtUnavailableError(CalculationError):
         super().__init__(message)
 
 
+class DuplicateInvoiceNumberError(DomainError):
+    """An invoice with this number already exists (UNIQUE invoice_no)."""
+
+    code = "DUPLICATE_INVOICE_NO"
+
+    def __init__(self, invoice_no: str) -> None:
+        self.invoice_no = invoice_no
+        super().__init__(f"Invoice number {invoice_no!r} already exists.")
+
+
+class InvoiceStateError(DomainError):
+    """An invoice operation is not allowed in its current state.
+
+    ``reason``: ``not_active`` (already cancelled/recalculated), ``has_payments`` (cancel needs a
+    refund first) or ``overpaid`` (recalculated total is below what was already paid).
+    """
+
+    code = "INVOICE_STATE"
+    _MESSAGES = {
+        "not_active": "Only an active invoice can be changed this way.",
+        "has_payments": "This invoice has recorded payments and cannot be cancelled.",
+        "overpaid": "The recalculated total is lower than the amount already paid.",
+    }
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(self._MESSAGES.get(reason, reason))
+
+
+class PaymentError(DomainError):
+    """A payment cannot be recorded (amount <= 0, over-payment, cancelled invoice).
+
+    ``reason`` is one of ``non_positive`` / ``exceeds`` / ``cancelled`` so the UI
+    can show a localized message.
+    """
+
+    code = "PAYMENT_ERROR"
+    _MESSAGES = {
+        "non_positive": "Payment amount must be greater than zero.",
+        "exceeds": "Payment exceeds the remaining balance of the invoice.",
+        "cancelled": "Cannot record a payment on a cancelled invoice.",
+        "inactive": "Cannot record a payment on a superseded (recalculated) invoice.",
+    }
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(self._MESSAGES.get(reason, reason))
+
+
 class VerificationNeededError(DomainError):
     """A special meter scenario needs operator verification (current < previous)."""
 

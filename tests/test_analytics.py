@@ -19,7 +19,7 @@ class _StubRepo:
 
 
 def _inv(month: str, *, kwh: Decimal, amount: str, official: str | None,
-         paid: str = "0", status=PaymentStatus.UNPAID) -> Invoice:
+         paid: str = "0", debt: str = "0", status=PaymentStatus.UNPAID) -> Invoice:
     y, m = month.split("-")
     return Invoice(
         invoice_no="X", account_no="1", subscription_no="", subscriber_name="",
@@ -30,6 +30,7 @@ def _inv(month: str, *, kwh: Decimal, amount: str, official: str | None,
         adjusted_kwh=kwh,
         current_amount=Money.of(amount),
         total_due=Money.of(amount),
+        previous_debt=Money.of(debt),
         official_amount=Money.of(official) if official else None,
         paid_amount=Money.of(paid),
         remaining_balance=Money.of(paid),
@@ -64,6 +65,25 @@ def test_monthly_review_aggregates_and_diff():
     assert totals["computed"].raw == Decimal("25000.00")
     assert totals["diff"].raw == Decimal("-5500.00")
     assert totals["overcharge_months"] == 1
+
+
+def test_monthly_paid_uses_cash_fifo_and_never_goes_negative():
+    """A payment on the invoice that carried old debt settles the older month first."""
+    jan = _inv("2026-01", kwh=Decimal("100"), amount="1000", official=None)
+    feb = _inv("2026-02", kwh=Decimal("100"), amount="2000", official=None,
+               paid="500", debt="1000")
+    svc = AnalyticsService(_StubRepo([jan, feb]))
+    stats = svc.compute_stats([jan, feb])
+    assert stats["monthly"]["2026-01"]["paid"].raw == Decimal("500.00")
+    assert stats["monthly"]["2026-02"]["paid"].raw == Decimal("0.00")
+    assert all(row["paid"].raw >= 0 for row in stats["monthly"].values())
+    assert sum(row["paid"].raw for row in stats["monthly"].values()) == Decimal("500.00")
+    # January's residual debt moved onto February, so February carries the exposure
+    assert stats["monthly"]["2026-01"]["outstanding"].raw == Decimal("0.00")
+    assert stats["monthly"]["2026-02"]["outstanding"].raw == Decimal("1500.00")
+    table = {row["month"]: row for row in svc.monthly_table([jan, feb])}
+    assert table["2026-01"]["remaining"].raw == Decimal("0.00")
+    assert table["2026-02"]["remaining"].raw == Decimal("1500.00")
 
 
 def test_monthly_review_empty():

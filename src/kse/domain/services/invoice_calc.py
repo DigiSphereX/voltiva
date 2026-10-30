@@ -49,9 +49,9 @@ def _money_ar(m: Money) -> str:
     Domain callers default to the Arabic style; when called through the UI the
     presentation layer picks the style via widgets.is_arabic_money().
     """
-    from ...presentation.widgets import is_arabic_money  # noqa: PLC0415
+    from ..money import is_arabic_display  # noqa: PLC0415
 
-    if is_arabic_money():
+    if is_arabic_display():
         return m.display_ar()
     from ...presentation.currencies import get_currency_code  # noqa: PLC0415
 
@@ -100,6 +100,10 @@ class InvoiceCalculation:
     consumption_days: int | None = None
     daily_average_kwh: Decimal = Decimal("0")
     monthly_average_kwh: Decimal = Decimal("0")
+    # The period actually priced; persistence must not invent one when the caller
+    # omits the dates (a same-day period silently overcharges on recalculation).
+    previous_read_date: dt.date | None = None
+    current_read_date: dt.date | None = None
 
 
 class InvoiceCalculator:
@@ -141,7 +145,13 @@ class InvoiceCalculator:
         # Billing-period length (official tiers are stated per 30 days; a
         # multi-month invoice stretches the tier limits by days/30).
         days = (current_read_date - previous_read_date).days
-        safe_days = max(days, 1)
+        if days < 1:
+            # Same-day (or reversed) readings have no meaningful period: scaling the
+            # tier limits by days/30 would shrink them to a fraction and multiply the
+            # bill. Never guess - the caller must supply a real period.
+            raise VerificationNeededError(
+                "تاريخ القراءة الحالية يجب أن يكون بعد تاريخ القراءة السابقة.")
+        safe_days = days
 
         # --- 2. Tariff energy cost ---
         tariff = TariffEngine.compute(tariff_schedule, consumption, billing_days=safe_days)
@@ -194,6 +204,8 @@ class InvoiceCalculator:
             consumption_days=days,
             daily_average_kwh=daily_avg,
             monthly_average_kwh=monthly_avg,
+            previous_read_date=previous_read_date,
+            current_read_date=current_read_date,
         )
 
         # --- 8. Official comparison ---
@@ -254,7 +266,6 @@ def _build_steps(
         label_ar="المدة الزمنية",
         value_display=f"{days} يوماً",
     ))
-
     steps.append(CalculationStep(is_divider=True, label_ar="", value_display=""))
 
     steps.append(CalculationStep(
@@ -276,8 +287,11 @@ def _build_steps(
             scale_txt = f"{tariff.scale:.2f}".rstrip("0").rstrip(".")
             steps.append(CalculationStep(
                 label_ar="حدود الشرائح ممددة",
-                value_display=f"×{scale_txt} (الفاتورة تغطي {days} يوماً والافتراضي 30)",
-                detail="الشرائح منشورة لكل 30 يوماً؛ تُضرب حدودها بنسبة أيام الدورة / 30",
+                # Language-neutral value; the period itself is the "المدة الزمنية" step
+                # and the full explanation stays in `detail` for the audit trail.
+                value_display=f"×{scale_txt}",
+                detail=(f"الفاتورة تغطي {days} يوماً؛ الشرائح منشورة لكل 30 يوماً "
+                        "وتُضرب حدودها بنسبة أيام الدورة / 30"),
             ))
         for r in tariff.rows:
             if r.quantity > 0:

@@ -260,15 +260,18 @@ class InvoiceOcr:
         binary = InvoiceOcr.binary()
         if binary:
             pytesseract.pytesseract.tesseract_cmd = binary
+        tessdata = InvoiceOcr.tessdata_dir()
+        if tessdata:
+            # Tesseract reads its data dir from TESSDATA_PREFIX. Passing it through the
+            # environment avoids the fragile "--tessdata-dir <path>" CLI string, which broke
+            # for paths containing spaces (quoting differs between shlex modes / platforms).
+            os.environ["TESSDATA_PREFIX"] = tessdata
         return pytesseract
 
     @staticmethod
     def _psm_config() -> str:
-        extra = ""
-        tessdata = InvoiceOcr.tessdata_dir()
-        if tessdata:
-            extra += f" --tessdata-dir {tessdata}"
-        return extra
+        # tessdata is supplied via TESSDATA_PREFIX (see _configured); nothing to add here
+        return ""
 
     # ---------------------------------------------------------- preprocess
     @staticmethod

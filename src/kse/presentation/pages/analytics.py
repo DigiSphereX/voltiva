@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QComboBox, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
-    QScrollArea, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QScrollArea, QTableWidgetItem,
+    QVBoxLayout, QWidget, QFileDialog, QMessageBox,
 )
 
 from .. import theme
-from ..charts import BarChart, StatCard
-from ..widgets import PageHeader, money_display, digits, currency_label, status_chip
+from ..charts import BarChart, DonutChart, StatCard
+from ..widgets import (
+    CardGrid, DataTable, PageHeader, chip_cell, configure_table, currency_label,
+    digits, error_text, ghost_button, money_display,
+)
 from ...domain.money import Money, fmt_quantity
 
 
@@ -35,18 +38,18 @@ class AnalyticsPage(QWidget):
 
         c = theme.colors()
         self.cards = [
-            StatCard(self.tr("dash_total_invoices"), icon="◈", accent=c["accent"]),
-            StatCard(self.tr("dash_total_kwh"), icon="⚡", accent=c["success"]),
-            StatCard(self.tr("dash_total_amount"), icon="◉", accent=c["warn"]),
-            StatCard(self.tr("dash_paid_amount"), icon="✓", accent=c["success"]),
-            StatCard(self.tr("dash_unpaid_amount"), icon="◌", accent=c["danger"]),
-            StatCard(self.tr("dash_collection_rate"), icon="◐", accent="#8B5CF6"),
-            StatCard(self.tr("dash_avg_invoice"), icon="÷", accent="#2DD4BF"),
-            StatCard(self.tr("dash_cost_per_kwh"), icon="◇", accent="#F2944C"),
-            StatCard(self.tr("an_forecast_amount"), icon="↗", accent="#6366F1"),
-            StatCard(self.tr("an_forecast_kwh"), icon="≈", accent="#14B8A6"),
-            StatCard(self.tr("an_highest_invoice"), icon="▲", accent=c["danger"]),
-            StatCard(self.tr("an_health_score"), icon="◆", accent=c["accent_hi"]),
+            StatCard(self.tr("dash_total_invoices"), icon="document", accent=c["accent"]),
+            StatCard(self.tr("dash_total_kwh"), icon="bolt", accent=c["success"]),
+            StatCard(self.tr("dash_total_amount"), icon="coins", accent=c["gold"]),
+            StatCard(self.tr("dash_paid_amount"), icon="check", accent=c["success"]),
+            StatCard(self.tr("dash_unpaid_amount"), icon="alert", accent=c["danger"]),
+            StatCard(self.tr("dash_collection_rate"), icon="percent", accent=c["violet"]),
+            StatCard(self.tr("dash_avg_invoice"), icon="bars", accent=c["teal"]),
+            StatCard(self.tr("dash_cost_per_kwh"), icon="gauge", accent=c["orange"]),
+            StatCard(self.tr("an_forecast_amount"), icon="trend", accent=c["violet"]),
+            StatCard(self.tr("an_forecast_kwh"), icon="wave", accent=c["teal"]),
+            StatCard(self.tr("an_highest_invoice"), icon="arrow-up", accent=c["danger"]),
+            StatCard(self.tr("an_health_score"), icon="pulse", accent=c["accent_hi"]),
         ]
         _kpi_tt = {
             0: "tt_kpi_invoices",
@@ -71,38 +74,49 @@ class AnalyticsPage(QWidget):
         self.alerts_lbl.setWordWrap(True)
         self.alerts_lbl.setVisible(False)
 
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for i, card in enumerate(self.cards):
-            grid.addWidget(card, i // 4, i % 4)
+        grid = CardGrid(self.cards, min_card_width=200, max_columns=4)
 
         top = QHBoxLayout()
-        top.addWidget(QLabel(self.tr("an_metric")))
+        top.setSpacing(10)
+        metric_lbl = QLabel(self.tr("an_metric"))
+        metric_lbl.setObjectName("FieldLabel")
+        range_lbl = QLabel(self.tr("an_range"))
+        range_lbl.setObjectName("FieldLabel")
+        self.metric_combo.setMinimumWidth(180)
+        self.range_combo.setMinimumWidth(150)
+        top.addWidget(metric_lbl)
         top.addWidget(self.metric_combo)
-        top.addSpacing(16)
-        top.addWidget(QLabel(self.tr("an_range")))
+        top.addSpacing(12)
+        top.addWidget(range_lbl)
         top.addWidget(self.range_combo)
         top.addStretch(1)
+        self.save_img_btn = ghost_button(self.tr("an_save_image"))
+        self.save_img_btn.setObjectName("Small")
+        self.save_img_btn.clicked.connect(self._save_image)
+        top.addWidget(self.save_img_btn)
 
         details = QHBoxLayout()
         details.setSpacing(12)
         details.addWidget(self._build_payment_panel(), 1)
         details.addWidget(self._build_leaders_panel(), 2)
 
-        self.month_table = QTableWidget()
+        self.month_table = DataTable()
         self.month_table.setColumnCount(7)
         self.month_table.setHorizontalHeaderLabels([
             self.tr("an_col_month"), self.tr("an_col_count"), self.tr("an_col_kwh"),
             self.tr("an_col_amount"), self.tr("an_col_paid"), self.tr("an_col_remaining"),
             self.tr("an_col_rate"),
         ])
-        self.month_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.month_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.month_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.month_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.month_table.setAlternatingRowColors(True)
-        self.month_table.verticalHeader().setVisible(False)
-        self.month_table.verticalHeader().setDefaultSectionSize(38)
+        configure_table(
+            self.month_table,
+            aligns=(Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignRight,
+                    Qt.AlignmentFlag.AlignRight, Qt.AlignmentFlag.AlignRight,
+                    Qt.AlignmentFlag.AlignRight, Qt.AlignmentFlag.AlignRight,
+                    Qt.AlignmentFlag.AlignRight),
+            widths={0: 110, 1: 92, 2: 150, 6: 132},
+            stretch=(3, 4, 5),
+            row_height=theme.Metrics.ROW_H, header_height=theme.Metrics.HEADER_H)
+        self.month_table.set_empty_text(self.tr("an_no_data"))
         self.month_table.setMinimumHeight(190)
 
         month_card = QFrame()
@@ -110,34 +124,52 @@ class AnalyticsPage(QWidget):
         month_layout = QVBoxLayout(month_card)
         month_layout.setContentsMargins(16, 14, 16, 16)
         month_layout.setSpacing(10)
+        month_head = QHBoxLayout()
         month_title = QLabel(self.tr("an_monthly_table"))
         month_title.setObjectName("CardTitle")
-        month_layout.addWidget(month_title)
+        self.export_month_btn = ghost_button(self.tr("an_export_table"))
+        self.export_month_btn.setToolTip(self.tr("tt_an_export_table"))
+        self.export_month_btn.clicked.connect(self._export_monthly_table)
+        month_head.addWidget(month_title)
+        month_head.addStretch(1)
+        month_head.addWidget(self.export_month_btn)
+        month_layout.addLayout(month_head)
         month_layout.addWidget(self.month_table)
 
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setContentsMargins(
+            theme.Metrics.PAGE_MARGIN, 18, theme.Metrics.PAGE_MARGIN, 18)
         layout.setSpacing(12)
         layout.addWidget(header)
-        layout.addLayout(grid)
-        layout.addSpacing(8)
+        layout.addWidget(grid)
+        layout.addSpacing(6)
         layout.addLayout(top)
-        layout.addWidget(self.chart, 1)
+        self.chart_card = chart_card = QFrame()
+        chart_card.setObjectName("Card")
+        chart_layout = QVBoxLayout(chart_card)
+        chart_layout.setContentsMargins(18, 14, 18, 14)
+        chart_layout.addWidget(self.chart)
+        self.chart.setMinimumHeight(300)
+        layout.addWidget(chart_card)
         layout.addLayout(details)
         layout.addWidget(month_card)
         layout.addWidget(self.alerts_lbl)
         layout.addWidget(self.trend_lbl)
         layout.addWidget(self.legend_lbl)
+        layout.addStretch(1)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(content)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll)
 
         self.metric_combo.currentIndexChanged.connect(self.refresh)
+        self.chart.barClicked.connect(self._open_month)
+        self.month_table.itemDoubleClicked.connect(self._open_month_from_table)
         self.range_combo.currentIndexChanged.connect(self.refresh)
 
     def _build_payment_panel(self) -> QFrame:
@@ -149,23 +181,8 @@ class AnalyticsPage(QWidget):
         title = QLabel(self.tr("an_payment_mix"))
         title.setObjectName("CardTitle")
         layout.addWidget(title)
-        self.payment_rows: dict[str, QLabel] = {}
-        for key in ("PAID", "PARTIAL", "UNPAID"):
-            row = QHBoxLayout()
-            label = QLabel(self.tr({
-                "PAID": "status_paid",
-                "PARTIAL": "status_partial",
-                "UNPAID": "status_unpaid",
-            }[key]))
-            value = QLabel("0")
-            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            value.setObjectName("Muted")
-            row.addWidget(label)
-            row.addStretch(1)
-            row.addWidget(value)
-            layout.addLayout(row)
-            self.payment_rows[key] = value
-        layout.addStretch(1)
+        self.payment_donut = DonutChart()
+        layout.addWidget(self.payment_donut, 1)
         return panel
 
     def _build_leaders_panel(self) -> QFrame:
@@ -177,29 +194,31 @@ class AnalyticsPage(QWidget):
         title = QLabel(self.tr("an_top_subscribers"))
         title.setObjectName("CardTitle")
         layout.addWidget(title)
-        self.leaders_table = QTableWidget()
+        self.leaders_table = DataTable()
         self.leaders_table.setColumnCount(5)
         self.leaders_table.setHorizontalHeaderLabels([
             self.tr("sb_name"), self.tr("sb_account_no"), self.tr("an_col_count"),
             self.tr("an_col_amount"), self.tr("an_col_remaining"),
         ])
-        self.leaders_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.leaders_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.leaders_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.leaders_table.setAlternatingRowColors(True)
-        self.leaders_table.verticalHeader().setVisible(False)
-        self.leaders_table.verticalHeader().setDefaultSectionSize(36)
+        configure_table(
+            self.leaders_table,
+            aligns=(Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignLeft,
+                    Qt.AlignmentFlag.AlignRight, Qt.AlignmentFlag.AlignRight,
+                    Qt.AlignmentFlag.AlignRight),
+            widths={1: 122, 2: 86, 3: 132, 4: 122}, stretch=(0,),
+            row_height=theme.Metrics.ROW_H, header_height=theme.Metrics.HEADER_H)
+        self.leaders_table.set_empty_text(self.tr("an_no_data"))
         self.leaders_table.setMinimumHeight(170)
         layout.addWidget(self.leaders_table)
         return panel
 
     def refresh(self) -> None:
-        invoices_all = self.app.repos["invoices"].search(limit=100_000)
+        invoices_all = self.app.repos["invoices"].active_snapshot()
         last_n = self.range_combo.currentData()
         invoices = self.app.analytics.filter_recent_months(invoices_all, last_n or 0)
         self._show_alerts(invoices)
         for card in self.cards:
-            card.set_value("0")
+            card.set_value(digits("0"))
             card.set_sub("")
         if not invoices:
             self.chart.set_data([], [], self.tr("an_no_data"))
@@ -212,7 +231,9 @@ class AnalyticsPage(QWidget):
 
         series = self.app.analytics.series_for_months(invoices, last_n=last_n or 1000)
         metric = self.metric_combo.currentData()
-        labels = [m[5:] + "/" + m[:4] for m in series["labels"]]
+        labels = [digits(m[5:] + "/" + m[:4]) for m in series["labels"]]
+        legend = None
+        integer = False
         if metric == "kwh":
             values = series["kwh"]
             caption = self.tr("an_caption_kwh")
@@ -221,18 +242,21 @@ class AnalyticsPage(QWidget):
             values = series["amount"]
             secondary = series["paid"]
             caption = self.tr("an_caption_amount")
+            legend = (self.tr("status_paid"), self.tr("status_unpaid"))
         else:
             values = [float(v) for v in series["count"]]
             caption = self.tr("an_caption_count")
             secondary = None
-        self.chart.set_data(labels, values, caption, secondary)
+            integer = True
+        self.chart.set_data(labels, values, caption, secondary, integer=integer, legend=legend,
+                            keys=list(series["labels"]))
         self.trend_lbl.setText(self.tr("an_trend") + ": " + self.tr(
             {"insufficient": "an_trend_insufficient", "up": "an_trend_up",
              "down": "an_trend_down", "flat": "an_trend_flat"}.get(
                 self.app.analytics.kwh_trend(invoices), "an_trend_insufficient")))
 
         stats = self.app.analytics.compute_stats(invoices)
-        self.cards[0].set_value(str(stats["total_invoices"]))
+        self.cards[0].set_value(digits(str(stats["total_invoices"])))
         self.cards[1].set_value(f"{digits(fmt_quantity(stats['total_kwh']))} {self.tr('unit_kwh')}")
         self.cards[2].set_value(money_display(stats["total_amount"]))
         self.cards[3].set_value(money_display(stats["total_paid"]))
@@ -266,10 +290,12 @@ class AnalyticsPage(QWidget):
             for a in alerts:
                 if a["type"] == "rate":
                     lines.append("— " + self.tr("an_anomaly_rate",
-                                                 m=a["month"], rate=a["rate"], avg=a["avg"]))
+                                                 m=digits(a["month"]), rate=digits(a["rate"]),
+                                                 avg=digits(a["avg"])))
                 else:
                     lines.append("— " + self.tr("an_anomaly_consumption",
-                                                 m=a["month"], kwh=a["kwh"], avg=a["avg"]))
+                                                 m=digits(a["month"]), kwh=digits(a["kwh"]),
+                                                 avg=digits(a["avg"])))
             self.alerts_lbl.setText(self.tr("an_alerts") + "\n" + "\n".join(lines))
             self.alerts_lbl.setVisible(True)
         else:
@@ -281,13 +307,69 @@ class AnalyticsPage(QWidget):
         unpaid_ratio = float(stats["unpaid_count"]) / total
         collection = float(stats["collection_rate"])
         score = max(0, min(100, int(collection - unpaid_ratio * 20)))
-        return f"{digits(score)}/100"
+        return f"{digits(score)}/{digits(100)}"
+
+    def _open_month(self, month_key: str) -> None:
+        """A click on a bar opens the invoices of that month (the invoices page reads this)."""
+        if month_key:
+            self.app.pending_invoice_filter = {"month": month_key}
+            self.app.navigate("invoices")
+
+    def _open_month_from_table(self, item: QTableWidgetItem) -> None:
+        row = item.row()
+        m_item = self.month_table.item(row, 0)
+        if m_item is not None:
+            key = m_item.data(Qt.ItemDataRole.UserRole) or ""
+            if key:
+                self._open_month(key)
+
+    def _export_monthly_table(self) -> None:
+        rows = getattr(self, "_last_monthly_rows", None)
+        if not rows:
+            return
+        from pathlib import Path
+        path, _ = QFileDialog.getSaveFileName(
+            self, self.tr("an_export_table"), "voltiva-monthly.xlsx",
+            "Excel (*.xlsx);;CSV (*.csv)")
+        if not path:
+            return
+        try:
+            if path.lower().endswith(".csv"):
+                from ...infrastructure.export.exporters import csv_export_monthly
+                csv_export_monthly(rows, path)
+            else:
+                from ...infrastructure.export.exporters import excel_export_monthly
+                if not path.lower().endswith(".xlsx"):
+                    path += ".xlsx"
+                excel_export_monthly(rows, path)
+            QMessageBox.information(
+                self, self.tr("success"),
+                self.tr("il_export_success", path=Path(path).name))
+        except Exception as exc:
+            QMessageBox.warning(self, self.tr("error"), error_text(self.app, exc))
+
+    def _save_image(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(self, self.tr("an_save_image"), "voltiva-chart.png", "PNG (*.png)")
+        if not path:
+            return
+        if not path.lower().endswith(".png"):
+            path += ".png"
+        if not self.chart_card.grab().save(path):
+            QMessageBox.warning(self, self.tr("error"), self.tr("an_save_failed"))
 
     def _fill_payment_mix(self, breakdown: dict) -> None:
-        for key, lbl in self.payment_rows.items():
+        spec = (("PAID", "status_paid", "success"),      # theme tokens: resolved when painting
+                ("PARTIAL", "status_partial", "warn"),
+                ("UNPAID", "status_unpaid", "danger"))
+        items, total = [], 0
+        for key, label_key, color in spec:
             data = breakdown.get(key, {"count": 0, "amount": None})
-            amount = money_display(data["amount"]) if data.get("amount") is not None else money_display(Money.zero())
-            lbl.setText(f"{digits(data.get('count', 0))} — {amount}")
+            count = int(data.get("count", 0) or 0)
+            total += count
+            amount = money_display(data["amount"]) if data.get("amount") is not None \
+                else money_display(Money.zero())
+            items.append((self.tr(label_key), float(count), color, f"{digits(count)} — {amount}"))
+        self.payment_donut.set_data(items, digits(total), self.tr("dash_total_invoices"))
 
     def _fill_leaders(self, rows: list[dict]) -> None:
         self.leaders_table.setRowCount(len(rows))
@@ -303,11 +385,13 @@ class AnalyticsPage(QWidget):
                 self.leaders_table.setItem(r, c, item)
 
     def _fill_month_table(self, rows: list[dict]) -> None:
+        self._last_monthly_rows = rows
         self.month_table.setRowCount(len(rows))
         c = theme.colors()
         for r, row in enumerate(rows):
+            remaining = row["remaining"].raw
             values = [
-                row["month"],
+                digits(row["month"]),
                 digits(row["count"]),
                 f"{digits(fmt_quantity(row['kwh']))} {self.tr('unit_kwh')}",
                 money_display(row["amount"]),
@@ -316,11 +400,17 @@ class AnalyticsPage(QWidget):
                 f"{digits(row['avg_rate'])} / {self.tr('unit_kwh')}",
             ]
             for col, value in enumerate(values):
-                item = QTableWidgetItem(str(value))
+                # The chip widget paints the remaining amount; keeping the item text too
+                # would draw the number twice, offset, inside the same cell.
+                text = "" if col == 5 and remaining > 0 else str(value)
+                item = QTableWidgetItem(text)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | (
                     Qt.AlignmentFlag.AlignRight if col else Qt.AlignmentFlag.AlignLeft))
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, row["month"])
                 self.month_table.setItem(r, col, item)
-            remaining = row["remaining"].raw
             if remaining > 0:
-                chip = status_chip(money_display(row["remaining"]), c["danger"])
-                self.month_table.setCellWidget(r, 5, chip)
+                self.month_table.setCellWidget(r, 5, chip_cell(money_display(row["remaining"]), c["danger"]))
+            else:
+                # a re-refresh may keep the row but drop the chip (e.g. the month got paid)
+                self.month_table.removeCellWidget(r, 5)

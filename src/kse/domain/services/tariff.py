@@ -117,7 +117,6 @@ class TariffEngine:
 
         # --- Progressive / Tiered ---
         rows: list[TariffBreakdownRow] = []
-        remaining = consumption
         total = Money.zero()
 
         tiers_sorted = sorted(schedule.tiers, key=lambda t: t.from_kwh)
@@ -138,16 +137,16 @@ class TariffEngine:
             upper = tier.to_kwh
             to_eff = (upper * scale) if upper is not None else None
 
-            if remaining <= 0:
+            if consumption <= from_eff:
                 qty = Decimal("0")
+            elif to_eff is None or consumption <= to_eff:
+                qty = consumption - from_eff
             else:
-                if consumption <= from_eff:
-                    qty = Decimal("0")
-                elif to_eff is None or consumption <= to_eff:
-                    qty = consumption - from_eff
-                else:
-                    qty = to_eff - from_eff
+                qty = to_eff - from_eff
 
+            # Defensive: malformed legacy tier data (end < start) must never produce
+            # a negative line item; the validator rejects such tables on save.
+            qty = max(qty, Decimal("0"))
             amount = round_money(qty * tier.rate_per_kwh)
             total = total + amount
             rows.append(TariffBreakdownRow(

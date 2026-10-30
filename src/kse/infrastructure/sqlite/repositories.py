@@ -32,10 +32,26 @@ from ...domain.models import (
     TariffSchedule,
     TariffTier,
 )
+from ...domain.errors import DuplicateInvoiceNumberError, InvoiceStateError, PaymentError
 from ...domain.money import Money
 from ..sqlite import db as db_module
 
 # ---------------------------------------------------------------- helpers
+
+
+def _like(query: str) -> str:
+    """Contains-pattern for ``LIKE ? ESCAPE '\\'`` with user wildcards neutralised.
+
+    A search for ``50%`` or ``A_1`` used to treat ``%``/``_`` as wildcards and
+    return unrelated rows.
+    """
+    return f"%{_escape_like(query)}%"
+
+
+def _escape_like(text: str) -> str:
+    """Escape LIKE wildcards (use together with ``ESCAPE '\\'``)."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 
 
 def _as_date(v) -> dt.date | None:
@@ -125,7 +141,7 @@ def _row_to_fee(r) -> TariffFee:
     )
 
 
-def _row_to_schedule(r, conn: sqlite3.Connection) -> TariffSchedule:
+def _row_to_schedule(r, conn: sqlite3.Connection, load_children: bool = True) -> TariffSchedule:
     s = TariffSchedule(
         id=r["id"],
         name_ar=r["name_ar"],
@@ -143,11 +159,38 @@ def _row_to_schedule(r, conn: sqlite3.Connection) -> TariffSchedule:
         notes=r["notes"],
         created_at=_as_dt(r["created_at"]),
     )
-    tiers = [ _row_to_tier(t) for t in conn.execute("SELECT * FROM TariffTiers WHERE schedule_id=? ORDER BY from_kwh", (s.id,)) ]
-    fees = [ _row_to_fee(f) for f in conn.execute("SELECT * FROM TariffFees WHERE schedule_id=?", (s.id,)) ]
-    s.tiers = tiers
-    s.fixed_fees = fees
+    if load_children:
+        s.tiers = [_row_to_tier(t) for t in conn.execute(
+            "SELECT * FROM TariffTiers WHERE schedule_id=? ORDER BY from_kwh", (s.id,))]
+        s.fixed_fees = [_row_to_fee(f) for f in conn.execute(
+            "SELECT * FROM TariffFees WHERE schedule_id=?", (s.id,))]
     return s
+
+
+def _rows_to_schedules(rows, conn: sqlite3.Connection) -> list[TariffSchedule]:
+    """Build schedules for many rows using 2 queries instead of 2 per schedule.
+
+    ``list_schedules`` runs on every calculation/verification, so the old
+    per-row tier/fee queries (N+1) added up quickly as tariffs accumulated.
+    """
+    if not rows:
+        return []
+    ids = [r["id"] for r in rows]
+    marks = ",".join("?" * len(ids))
+    tiers_by: dict[int, list] = {i: [] for i in ids}
+    fees_by: dict[int, list] = {i: [] for i in ids}
+    for t in conn.execute(
+            f"SELECT * FROM TariffTiers WHERE schedule_id IN ({marks}) ORDER BY schedule_id, from_kwh", ids):
+        tiers_by[t["schedule_id"]].append(_row_to_tier(t))
+    for f in conn.execute(f"SELECT * FROM TariffFees WHERE schedule_id IN ({marks}) ORDER BY id", ids):
+        fees_by[f["schedule_id"]].append(_row_to_fee(f))
+    out = []
+    for r in rows:
+        s = _row_to_schedule(r, conn, load_children=False)
+        s.tiers = tiers_by[s.id]
+        s.fixed_fees = fees_by[s.id]
+        out.append(s)
+    return out
 
 
 def _row_to_invoice(r) -> Invoice:
@@ -245,10 +288,11 @@ class SqliteSubscriberRepository:
         return _row_to_subscriber(r)
 
     def search(self, query: str, limit: int = 50) -> list[Subscriber]:
-        q = f"%{query}%"
+        q = _like(query)
         rows = self.conn.execute(
             """SELECT * FROM Subscribers
-               WHERE name LIKE ? OR account_no LIKE ? OR subscription_no LIKE ?
+               WHERE name LIKE ? ESCAPE '\\' OR account_no LIKE ? ESCAPE '\\'
+                  OR subscription_no LIKE ? ESCAPE '\\'
                ORDER BY name LIMIT ?""",
             (q, q, q, limit),
         ).fetchall()
@@ -331,7 +375,7 @@ class SqliteTariffRepository:
             sql += " WHERE is_active=1"
         sql += " ORDER BY subscriber_type, effective_from DESC, id DESC"
         rows = self.conn.execute(sql).fetchall()
-        return [_row_to_schedule(r, self.conn) for r in rows]
+        return _rows_to_schedules(rows, self.conn)
 
     def get_schedule(self, schedule_id: int) -> TariffSchedule | None:
         r = self.conn.execute("SELECT * FROM TariffSchedules WHERE id=?", (schedule_id,)).fetchone()
@@ -418,11 +462,63 @@ class SqliteTariffRepository:
         f.id = cur.lastrowid
 
 
+# Sortable invoice-list columns -> SQL expression. Money/quantity columns are stored as exact
+# decimal TEXT, so they are cast for ORDERING only (values themselves are never rounded).
+_INVOICE_ORDER = {
+    "date": "issue_date",
+    "no": "invoice_no",
+    "name": "subscriber_name COLLATE NOCASE",
+    "account": "account_no",
+    "kwh": "CAST(adjusted_kwh AS REAL)",
+    "total": "CAST(total_due AS REAL)",
+    "official": "CAST(NULLIF(official_amount, '') AS REAL)",
+    "status": "payment_status",
+}
+
+
 class SqliteInvoiceRepository:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+        self._snapshot: tuple | None = None
+
+    # ---- cached read model ------------------------------------------------
+    def _version_key(self) -> tuple:
+        """Changes whenever ANY row changes: ``total_changes`` covers this connection's own
+        writes, ``data_version`` covers commits made by other connections/processes."""
+        return (id(self.conn), self.conn.total_changes,
+                self.conn.execute("PRAGMA data_version").fetchone()[0])
+
+    def active_snapshot(self) -> list[Invoice]:
+        """All ACTIVE invoices, newest first, cached until the data changes.
+
+        Dashboard, analytics and review all need the full list; rebuilding ~9 ``Money``
+        values per row on every page switch cost ~35 ms per 1 000 invoices each time.
+        The returned list is a copy; the invoices themselves must be treated as read-only.
+        """
+        key = self._version_key()
+        if self._snapshot is None or self._snapshot[0] != key:
+            rows = self.conn.execute(
+                "SELECT * FROM Invoices WHERE status='ACTIVE' ORDER BY issue_date DESC, id DESC").fetchall()
+            self._snapshot = (key, [_row_to_invoice(r) for r in rows])
+        return list(self._snapshot[1])
+
+    def invoice_numbers(self, prefix: str = "") -> list[str]:
+        """Invoice numbers starting with ``prefix`` - one narrow column instead of full rows."""
+        rows = self.conn.execute(
+            "SELECT invoice_no FROM Invoices WHERE invoice_no LIKE ? ESCAPE '\\'",
+            (_escape_like(prefix) + "%",),
+        ).fetchall()
+        return [r[0] for r in rows]
 
     def save(self, invoice: Invoice, reading: InvoiceReading | None, charges: list[InvoiceCharge]) -> Invoice:
+        try:
+            return self._save(invoice, reading, charges)
+        except sqlite3.IntegrityError as exc:
+            if "invoice_no" in str(exc):   # UNIQUE index ux_invoices_invoice_no
+                raise DuplicateInvoiceNumberError(invoice.invoice_no) from exc
+            raise
+
+    def _save(self, invoice: Invoice, reading: InvoiceReading | None, charges: list[InvoiceCharge]) -> Invoice:
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         if invoice.id is None:
             cur = self.conn.execute(
@@ -517,13 +613,18 @@ class SqliteInvoiceRepository:
         return [_row_to_invoice(r) for r in rows]
 
     def search(self, *, query="", subscriber_id=None, payment_status=None, date_from=None, date_to=None,
+               status=None, order_by: str = "date", descending: bool = True,
                limit: int = 200, offset: int = 0) -> list[Invoice]:
         sql = "SELECT * FROM Invoices WHERE 1=1"
         params: list[Any] = []
         if query:
-            sql += " AND (invoice_no LIKE ? OR account_no LIKE ? OR subscription_no LIKE ? OR subscriber_name LIKE ?)"
-            like = f"%{query}%"
+            sql += (" AND (invoice_no LIKE ? ESCAPE '\\' OR account_no LIKE ? ESCAPE '\\'"
+                    " OR subscription_no LIKE ? ESCAPE '\\' OR subscriber_name LIKE ? ESCAPE '\\')")
+            like = _like(query)
             params += [like, like, like, like]
+        if status is not None:
+            sql += " AND status=?"
+            params.append(getattr(status, "value", status))
         if subscriber_id is not None:
             sql += " AND subscriber_id=?"
             params.append(subscriber_id)
@@ -536,7 +637,9 @@ class SqliteInvoiceRepository:
         if date_to is not None:
             sql += " AND issue_date<=?"
             params.append(date_to.isoformat())
-        sql += " ORDER BY issue_date DESC, id DESC LIMIT ? OFFSET ?"
+        column = _INVOICE_ORDER.get(order_by, _INVOICE_ORDER["date"])      # whitelist: never user text
+        direction = "DESC" if descending else "ASC"
+        sql += f" ORDER BY {column} {direction}, id {direction} LIMIT ? OFFSET ?"
         params += [limit, offset]
         rows = self.conn.execute(sql, params).fetchall()
         return [_row_to_invoice(r) for r in rows]
@@ -550,6 +653,17 @@ class SqliteInvoiceRepository:
         if filters.get("subscriber_id"):
             sql += " AND subscriber_id=?"
             params.append(filters["subscriber_id"])
+        if filters.get("date_from") is not None:
+            sql += " AND issue_date>=?"
+            params.append(filters["date_from"].isoformat())
+        if filters.get("date_to") is not None:
+            sql += " AND issue_date<=?"
+            params.append(filters["date_to"].isoformat())
+        if filters.get("query"):          # same predicate as search(query=...)
+            sql += (" AND (invoice_no LIKE ? ESCAPE '\\' OR account_no LIKE ? ESCAPE '\\'"
+                    " OR subscription_no LIKE ? ESCAPE '\\' OR subscriber_name LIKE ? ESCAPE '\\')")
+            like = _like(filters["query"])
+            params += [like, like, like, like]
         r = self.conn.execute(sql, params).fetchone()
         return r[0]
 
@@ -564,11 +678,49 @@ class SqliteInvoiceRepository:
         rows = self.conn.execute("SELECT * FROM InvoiceCharges WHERE invoice_id=? ORDER BY id", (invoice_id,)).fetchall()
         return [_row_to_charge(r) for r in rows]
 
+    def list_payments(self, invoice_id: int) -> list[Payment]:
+        rows = self.conn.execute(
+            "SELECT * FROM Payments WHERE invoice_id=? ORDER BY paid_at, id", (invoice_id,)).fetchall()
+        return [Payment(
+            id=r["id"], invoice_id=r["invoice_id"], amount=Money.from_db(r["amount"]),
+            paid_at=_as_date(r["paid_at"]), method=r["method"], notes=r["notes"],
+            created_at=_as_dt(r["created_at"])) for r in rows]
+
+    def set_status(self, invoice_id: int, status: InvoiceStatus) -> None:
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        self.conn.execute("UPDATE Invoices SET status=?, updated_at=? WHERE id=?",
+                          (status.value, now, invoice_id))
+
+    def transfer_payments(self, from_id: int, to_id: int) -> None:
+        """Move payments (and the paid amount) from a superseded invoice to its replacement."""
+        old, new = self.get(from_id), self.get(to_id)
+        if old is None or new is None:
+            raise ValueError("invoice not found")
+        paid = old.paid_amount
+        if paid > new.total_due:
+            raise InvoiceStateError("overpaid")
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        self.conn.execute("UPDATE Payments SET invoice_id=? WHERE invoice_id=?", (to_id, from_id))
+        if paid.raw <= 0:
+            return
+        status = PaymentStatus.PAID if paid >= new.total_due else PaymentStatus.PARTIAL
+        self.conn.execute(
+            "UPDATE Invoices SET paid_amount=?, payment_status=?, remaining_balance=?, updated_at=? WHERE id=?",
+            (paid.to_db(), status.value, (new.total_due - paid).to_db(), now, to_id))
+
     def set_payment(self, invoice_id: int, amount, paid_at, method, notes) -> None:
         invoice = self.get(invoice_id)
         if invoice is None:
             raise ValueError("invoice not found")
         paid = Money.of(amount)
+        if paid.raw <= 0:
+            raise PaymentError("non_positive")
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise PaymentError("cancelled")
+        if invoice.status != InvoiceStatus.ACTIVE:
+            raise PaymentError("inactive")
+        if invoice.paid_amount + paid > invoice.total_due:
+            raise PaymentError("exceeds")
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         cur = self.conn.execute(
             "INSERT INTO Payments (invoice_id, amount, paid_at, method, notes, created_at) VALUES (?,?,?,?,?,?)",

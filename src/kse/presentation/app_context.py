@@ -7,14 +7,14 @@ from pathlib import Path
 from ..application.analytics import AnalyticsService
 from ..application.services import InvoiceService, SubscriberService, TariffService
 from ..domain.enums import DataSource
-from ..infrastructure.backup import backup_database, restore_database
+from ..infrastructure.backup import auto_backup, backup_database, restore_database, validate_backup
 from ..infrastructure.sqlite.db import connect, default_db_path
 from ..infrastructure.sqlite.repositories import build_repositories
 from ..infrastructure.sqlite.seed import seed
 from . import theme
 from .currencies import CURRENCIES, set_currency_code
 from .i18n import I18n
-from .widgets import set_money_lang
+from .widgets import set_money_lang, set_ui_lang
 
 
 class AppContext:
@@ -23,15 +23,19 @@ class AppContext:
     def __init__(self, db_path: str | Path | None = None, *, lang: str | None = None) -> None:
         self.db_path = Path(db_path) if db_path else default_db_path()
         self.conn: sqlite3.Connection = connect(self.db_path)
+        self._closed = False
         self.repos = build_repositories(self.conn)
         self.i18n = I18n(lang or self.effective_language())
+        set_ui_lang(self.i18n.lang)
         self._sync_money_display()
         self._build_services()
         self._nav_handler = None
         self._invoice_handler = None
         self._icon_handler = None
         self._refresh_listeners: list = []
+        self._theme_listeners: list = []
         self.seed_if_empty()
+        self._baseline_changes = self.conn.total_changes   # writes made after this point are "this session"
         theme.set_current(self.current_theme())
         set_currency_code(self.effective_currency())
 
@@ -64,8 +68,16 @@ class AppContext:
         for fn in list(self._refresh_listeners):
             fn()
 
+    def on_theme(self, fn) -> None:
+        """Register a callback invoked after the active palette changes."""
+        self._theme_listeners.append(fn)
+
+    def notify_theme(self) -> None:
+        for fn in list(self._theme_listeners):
+            fn()
+
     def current_theme_mode(self) -> str:
-        """Persisted theme mode ("auto" | "dark" | "light"); defaults to auto.
+        """Persisted appearance: "auto" or any palette name ("light", "dark", ...).
 
         Migrates the legacy single-value "theme" setting (light/dark) into a mode.
         """
@@ -84,22 +96,24 @@ class AppContext:
         return theme.THEME_AUTO
 
     def current_theme(self) -> str:
-        """The resolved, effective theme palette name ("dark" | "light")."""
+        """The resolved, effective palette name (auto follows the OS)."""
         return theme.resolve_theme_name(self.current_theme_mode())
 
     def set_theme_mode(self, mode: str) -> str:
-        """Persist the display-mode preference (auto/light/dark) and apply it."""
+        """Persist the appearance choice (auto or a palette) and apply it."""
         mode = mode if mode in theme.THEME_MODES else theme.THEME_AUTO
         try:
             self.repos["settings"].set("theme_mode", mode, DataSource.USER_DEFINED)
             self.conn.commit()
         except Exception:
             pass
-        return self.apply_theme()
+        name = self.apply_theme()
+        self.notify_theme()
+        return name
 
     def set_theme(self, name: str) -> str:
-        """Explicit theme choice (dark/light) — stores it as a fixed mode."""
-        name = name if name in ("dark", "light") else "light"
+        """Explicit palette choice - stores it as a fixed mode."""
+        name = name if name in theme.palette_names() else theme.THEME_LIGHT
         return self.set_theme_mode(name)
 
     def apply_theme(self) -> str:
@@ -110,13 +124,14 @@ class AppContext:
         theme.set_current(name)
         app = QApplication.instance()
         if app is not None:
-            theme.apply(app, name)
+            theme.apply(app, name, rtl=self.i18n.rtl)
         return name
 
     def set_language(self, lang: str) -> bool:
         """Switch UI language; False when the language is not available."""
         if lang not in I18n.AVAILABLE_LANGS:
             return False
+        set_ui_lang(lang)          # before listeners rebuild pages / calendars
         self.i18n.set_lang(lang)
         self._sync_money_display()
         return True
@@ -302,17 +317,72 @@ class AppContext:
         return backup_database(self.db_path, dest)
 
     def restore(self, source: str | Path) -> Path:
+        validate_backup(source)  # reject bad files BEFORE touching the live connection
         self.conn.close()
-        restored = restore_database(self.db_path, source)
-        self.conn = connect(self.db_path)
-        self.repos = build_repositories(self.conn)
-        self._build_services()
+        try:
+            restored = restore_database(self.db_path, source)
+        finally:
+            # even if the restore fails the app must keep a working connection
+            self.conn = connect(self.db_path)
+            self.repos = build_repositories(self.conn)
+            self._build_services()
+            self._baseline_changes = self.conn.total_changes
         return restored
 
     def relink_after_restore(self) -> None:
         self._build_services()
 
+    def auto_backup_enabled(self) -> bool:
+        return self.repos["settings"].get("auto_backup", "1") != "0"
+
+    def set_auto_backup(self, enabled: bool) -> None:
+        self.repos["settings"].set("auto_backup", "1" if enabled else "0", DataSource.USER_DEFINED)
+        self.repos["uow"].commit()
+
+    def _auto_backup_on_exit(self) -> None:
+        """One safety copy per session in which data actually changed (never blocks closing)."""
+        try:
+            if self.auto_backup_enabled() and self.conn.total_changes > self._baseline_changes:
+                self.conn.commit()
+                auto_backup(self.conn, self.db_path)
+        except Exception:  # noqa: BLE001
+            import logging
+            logging.getLogger("voltiva").exception("automatic backup failed")
+
+    def optimize_database(self) -> int:
+        """Run VACUUM, ANALYZE, and PRAGMA optimize to compact and optimize database.
+        Returns the compacted database file size in bytes.
+        """
+        self.conn.commit()
+        self.conn.execute("PRAGMA optimize")
+        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self.conn.execute("VACUUM")
+        self.conn.execute("ANALYZE")
+        from ..domain.models import AuditLogEntry
+        self.repos["audit"].append(AuditLogEntry(
+            action="DB_OPTIMIZE", entity_type="DATABASE", entity_id=0,
+            user="local", description="Database vacuumed and query planner analyzed",
+            details_json="{}",
+        ))
+        self.conn.commit()
+        if self.db_path.exists():
+            return self.db_path.stat().st_size
+        return 0
+
     def close(self) -> None:
+        # closeEvent() and the exit hook may both call this; never touch a closed DB.
+        if self._closed:
+            return
+        self._closed = True
+        self._auto_backup_on_exit()
+        try:
+            # Fold the write-ahead log into kahraba.db so the single .db file is complete when
+            # the user copies it, and let SQLite refresh its query-planner statistics.
+            self.conn.commit()
+            self.conn.execute("PRAGMA optimize")
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
         try:
             self.conn.close()
         except Exception:

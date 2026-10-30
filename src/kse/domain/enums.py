@@ -50,7 +50,7 @@ class TariffMethod(str, enum.Enum):
 
     @property
     def label_en(self) -> str:
-        return {"FLAT": "Flat rate", "PROGRESSIVE": "Progressive (tiered)"}[self.value]
+        return {"FLAT": "Flat rate", "PROGRESSIVE": "Progressive"}[self.value]
 
 
 class ServiceZone(str, enum.Enum):
@@ -68,17 +68,17 @@ class ServiceZone(str, enum.Enum):
     @property
     def label_ar(self) -> str:
         return {
-            "TRADITIONAL": "تقليدي (شبكة عامة)",
+            "TRADITIONAL": "تقليدي",
             "SMART_METER": "عداد ذكي",
-            "INVESTMENT": "استثمار (خدمة وجباية)",
+            "INVESTMENT": "استثمار",
         }[self.value]
 
     @property
     def label_en(self) -> str:
         return {
-            "TRADITIONAL": "Traditional (public grid)",
+            "TRADITIONAL": "Traditional",
             "SMART_METER": "Smart meter",
-            "INVESTMENT": "Investment (service & collection)",
+            "INVESTMENT": "Investment",
         }[self.value]
 
 

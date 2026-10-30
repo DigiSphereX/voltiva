@@ -5,7 +5,6 @@ via the offscreen platform produces distorted/cosmetic fonts.
 """
 import os
 import sys
-import time
 
 if "--offscreen" in sys.argv:
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -15,6 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from PyQt6.QtGui import QFont
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from kse.presentation import theme
@@ -27,13 +27,13 @@ import tempfile
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shots")
 os.makedirs(OUT, exist_ok=True)
 
-SETTLE = 0.3
+SETTLE_MS = 500     # chart entrance animation runs 380 ms, so let the event loop drive it
 
 
 def _settle(app) -> None:
     """Let the widget paint/render before grabbing (native first paint)."""
     app.processEvents()
-    time.sleep(SETTLE)
+    QTest.qWait(SETTLE_MS)
     app.processEvents()
 
 
@@ -54,7 +54,7 @@ def _dialogs(ctx, win, app, tag: str) -> None:
         dlg.hide()
 
     nb = tariffs.TariffDialog(ctx, None, win)
-    nb.resize(620, 700)
+    nb.resize(660, 700)
     nb.show()
     _settle(app)
     nb.grab().save(os.path.join(OUT, f"dialog-tariff-narrow-{tag}.png"))
@@ -77,7 +77,7 @@ def main() -> int:
     ctx.conn.commit()
 
     win = MainWindow(ctx)
-    win.resize(1180, 760)
+    win.resize(1280, 820)
     win.show()
     _settle(app)
 
@@ -86,24 +86,44 @@ def main() -> int:
         "dashboard", "new_invoice", "invoices", "verify", "review", "analytics",
         "tariffs", "subscribers", "settings"]
     run_dialogs = not pages_arg
-    for theme_name in ("dark", "light"):
-        theme.apply(app, theme_name)
+    for theme_name in ("light", "dark", "midnight", "graphite", "sepia", "frost"):
+        ctx.set_theme_mode(theme_name)
         _settle(app)
         for key in pages:
             win.show_page(key)
             _settle(app)
             win.grab().save(os.path.join(OUT, f"{key}-{theme_name}.png"))
             print("saved", key, theme_name, flush=True)
-        if run_dialogs:
+        if run_dialogs and theme_name in ("light", "dark"):
             _dialogs(ctx, win, app, theme_name)
 
+        win.show_page("invoices")
+        _settle(app)
+        invoices_page = win._pages["invoices"]
+        first = invoices_page.table.item(0, 0)
+        if first is not None:
+            invoices_page._open_detail(first)
+            _settle(app)
+            win.grab().save(os.path.join(OUT, f"invoice_detail-{theme_name}.png"))
+            print("saved", f"invoice_detail-{theme_name}.png", flush=True)
+
         win.show_page("new_invoice")
-        win.resize(900, 560)
+        win.resize(1080, 660)
         _settle(app)
         win.grab().save(os.path.join(OUT, f"new_invoice-narrow-{theme_name}.png"))
         print("saved", f"new_invoice-narrow-{theme_name}.png", flush=True)
-        win.resize(1180, 760)
+        win.resize(1280, 820)
         _settle(app)
+
+    ctx.set_theme_mode("light")
+    ctx.set_language_pref("ar")
+    _settle(app)
+    for key in ("dashboard", "new_invoice", "invoices", "verify", "review", "analytics",
+                "tariffs", "subscribers", "settings"):
+        win.show_page(key)
+        _settle(app)
+        win.grab().save(os.path.join(OUT, f"{key}-ar.png"))
+        print("saved", f"{key}-ar.png", flush=True)
 
     ctx.close()
     return 0

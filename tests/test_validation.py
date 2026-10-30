@@ -39,6 +39,12 @@ class TestDates:
         r = ValidationEngine.validate_dates(previous_date=None, current_date=None, issue_date=None)
         assert any(i.code == "DATE_MISSING" for i in r.issues)
 
+    def test_same_day_rejected(self):
+        # A zero-day period used to be accepted and multiplied the bill (÷30 scaling).
+        r = ValidationEngine.validate_dates(
+            previous_date=dt.date(2024, 3, 1), current_date=dt.date(2024, 3, 1), issue_date=None)
+        assert any(i.code == "DATE_NOT_AFTER" for i in r.errors)
+
 
 class TestAccounts:
     def test_valid_account(self):
@@ -146,3 +152,31 @@ class TestTariff:
         ]
         r = ValidationEngine.validate_tariff(s)
         assert not r.has_errors
+
+    def test_open_ended_middle_tier_rejected(self):
+        # An ∞ tier in the middle silently swallowed every later tier.
+        from kse.domain.enums import TariffMethod
+        from kse.domain.models import TariffTier
+        from conftest import make_schedule
+
+        s = make_schedule(method=TariffMethod.PROGRESSIVE)
+        s.tiers = [
+            TariffTier(tier_no=1, from_kwh=Decimal("0"), to_kwh=Decimal("1000"), rate_per_kwh=Decimal("10")),
+            TariffTier(tier_no=2, from_kwh=Decimal("1000"), to_kwh=None, rate_per_kwh=Decimal("15")),
+            TariffTier(tier_no=3, from_kwh=Decimal("2000"), to_kwh=None, rate_per_kwh=Decimal("20")),
+        ]
+        r = ValidationEngine.validate_tariff(s)
+        assert any(i.code == "TARIFF_OPEN_END" for i in r.errors)
+
+    def test_inverted_tier_range_rejected(self):
+        from kse.domain.enums import TariffMethod
+        from kse.domain.models import TariffTier
+        from conftest import make_schedule
+
+        s = make_schedule(method=TariffMethod.PROGRESSIVE)
+        s.tiers = [
+            TariffTier(tier_no=1, from_kwh=Decimal("0"), to_kwh=Decimal("1000"), rate_per_kwh=Decimal("10")),
+            TariffTier(tier_no=2, from_kwh=Decimal("1000"), to_kwh=Decimal("500"), rate_per_kwh=Decimal("15")),
+        ]
+        r = ValidationEngine.validate_tariff(s)
+        assert any(i.code == "TARIFF_BOUNDS" for i in r.errors)

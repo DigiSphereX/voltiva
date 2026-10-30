@@ -42,6 +42,20 @@ class TestMoney:
         with pytest.raises(ValueError):
             Money.parse_iqd_input("abc")
 
+    def test_parse_iqd_input_rejects_negative(self):
+        # A typed minus used to be stripped and the amount silently flipped positive.
+        with pytest.raises(ValueError):
+            Money.parse_iqd_input("-500")
+        with pytest.raises(ValueError):
+            Money.parse_iqd_input("−500")      # U+2212 minus from some keyboards
+
+    def test_division_by_zero_rejected(self):
+        with pytest.raises(ZeroDivisionError):
+            Money.of(100) / 0
+        with pytest.raises(ZeroDivisionError):
+            Money.of(100) / Decimal("0")
+        assert (Money.of(100) / 4).raw == Decimal("25.00")
+
     def test_parse_reading_rejects_fraction(self):
         with pytest.raises(ValueError):
             Money.parse_reading("12.5")

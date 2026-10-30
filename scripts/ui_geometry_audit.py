@@ -26,7 +26,12 @@ def audit(widget, label, report):
         if not w.isVisible():
             continue
         sh = w.sizeHint()
-        if w.height() < sh.height() - 2 or w.width() < sh.width() - 8:
+        # A single-line edit scrolls its text horizontally, so a width shorter than the
+        # style's 17-character hint is not clipping - only its height matters.
+        clipped = w.height() < sh.height() - 2
+        if not isinstance(w, QLineEdit):
+            clipped = clipped or w.width() < sh.width() - 8
+        if clipped:
             report.append((label, type(w).__name__, w.text()[:22], w.width(), sh.width(), w.height(), sh.height()))
     for t in widget.findChildren(QTableWidget):
         if not t.isVisible():
@@ -51,7 +56,7 @@ def main() -> int:
     ctx.conn.commit()
     theme.apply(app, "dark")
     win = MainWindow(ctx)
-    win.resize(1180, 760)
+    win.resize(1280, 820)
     win.show()
 
     report = []
@@ -71,7 +76,7 @@ def main() -> int:
         dlg.close()
         app.processEvents()
 
-    win.resize(900, 560)
+    win.resize(1080, 660)
     win.show_page("new_invoice")
     app.processEvents()
     audit(win._pages["new_invoice"], "new_invoice-narrow", report)

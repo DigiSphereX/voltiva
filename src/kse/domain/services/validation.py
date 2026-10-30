@@ -19,11 +19,12 @@ SUBSCRIPTION_NO_RE = re.compile(r"^[\w\-]{4,30}$")
 
 _VLD_KEYS = {
     "READING_NEGATIVE", "READING_INVALID", "READING_DECREASE",
-    "DATE_MISSING", "DATE_ORDER", "ISSUE_DATE_BEFORE_READING",
+    "DATE_MISSING", "DATE_ORDER", "DATE_NOT_AFTER", "ISSUE_DATE_BEFORE_READING",
     "ACCOUNT_MISSING", "ACCOUNT_FORMAT",
     "NEGATIVE_FEE", "DOUBLE_NEGATIVE_DISCOUNT", "NEGATIVE_AMOUNT",
     "TARIFF_NAME", "TARIFF_DATE", "TARIFF_RANGE", "TARIFF_NO_TIERS",
-    "TARIFF_NEGATIVE", "TARIFF_OVERLAP", "SUBSCRIBER_NAME",
+    "TARIFF_NEGATIVE", "TARIFF_OVERLAP", "TARIFF_BOUNDS", "TARIFF_OPEN_END",
+    "SUBSCRIBER_NAME",
 }
 
 
@@ -125,8 +126,16 @@ class ValidationEngine:
             report.issues.append(Issue("DATE_MISSING", "ERROR", "تاريخ القراءة السابقة غير محدد.", "previous_read_date"))
         if current_date is None:
             report.issues.append(Issue("DATE_MISSING", "ERROR", "تاريخ القراءة الحالية غير محدد.", "current_read_date"))
-        if previous_date is not None and current_date is not None and current_date < previous_date:
-            report.issues.append(Issue("DATE_ORDER", "ERROR", "تاريخ القراءة الحالية قبل تاريخ القراءة السابقة.", "current_read_date"))
+        if previous_date is not None and current_date is not None:
+            if current_date < previous_date:
+                report.issues.append(Issue("DATE_ORDER", "ERROR", "تاريخ القراءة الحالية قبل تاريخ القراءة السابقة.", "current_read_date"))
+            elif current_date == previous_date:
+                # A zero-day period would divide the 30-day tier limits by 30 and
+                # multiply the bill (tests: 1 000 kWh billed as a single day).
+                report.issues.append(Issue(
+                    "DATE_NOT_AFTER", "ERROR",
+                    "تاريخ القراءة الحالية يجب أن يكون بعد تاريخ القراءة السابقة.",
+                    "current_read_date"))
         if issue_date is not None and current_date is not None and issue_date < current_date:
             report.issues.append(Issue("ISSUE_DATE_BEFORE_READING", "ERROR", "تاريخ الإصدار قبل تاريخ القراءة الحالية.", "issue_date"))
         return report
@@ -182,22 +191,35 @@ class ValidationEngine:
         # Both real-world conventions are accepted and treated as contiguous:
         #   A) 0-1500 / 1500-3000 (exclusive upper bound on the previous tier)
         #   B) 1-1500 / 1501-3000 (inclusive bounds as printed on the official invoices)
-        expected_from: Optional[Decimal] = None
+        first = True
+        prev_to: Optional[Decimal] = None
         for t in sorted(schedule.tiers, key=lambda x: x.from_kwh):
             if t.from_kwh < 0 or t.rate_per_kwh < 0:
                 report.issues.append(Issue("TARIFF_NEGATIVE", "ERROR", "نقاط الشرائح والأسعار لا يمكن أن تكون سالبة."))
-            if expected_from is None:
+            if t.to_kwh is not None and t.to_kwh <= t.from_kwh:
+                # An inverted range gives the engine a negative quantity (a negative charge).
+                report.issues.append(Issue(
+                    "TARIFF_BOUNDS", "ERROR",
+                    "نهاية كل شريحة يجب أن تكون أكبر من بدايتها."))
+            if first:
                 if t.from_kwh not in (Decimal("0"), Decimal("1")):
                     report.issues.append(Issue(
                         "TARIFF_OVERLAP", "ERROR",
                         "هناك تداخل أو فراغ بين الشرائح — يجب أن تبدأ الشريحة الأولى من 0 أو 1، "
                         "وكل شريحة من قيمة نهاية السابقة (مثل 1-1500 ثم 1501-3000)."))
-            elif t.from_kwh not in (expected_from, expected_from + 1):
+            elif prev_to is None:
+                # The previous tier is open-ended (∞), so this one can never be reached;
+                # the engine would charge both tiers for the same kWh.
+                report.issues.append(Issue(
+                    "TARIFF_OPEN_END", "ERROR",
+                    "الشريحة المفتوحة (∞) يجب أن تكون الشريحة الأخيرة."))
+            elif t.from_kwh not in (prev_to, prev_to + 1):
                 report.issues.append(Issue(
                     "TARIFF_OVERLAP", "ERROR",
                     "هناك تداخل أو فراغ بين الشرائح — يجب أن تبدأ كل شريحة من نهاية سابقتها "
                     "(مثل 1-1500 ثم 1501-3000، أو 0-1500 ثم 1500-3000)."))
-            expected_from = t.to_kwh
+            prev_to = t.to_kwh
+            first = False
         return report
 
     @staticmethod

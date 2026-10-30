@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
@@ -19,15 +20,20 @@ from ..domain.enums import (
 )
 from ..domain.errors import (
     DebtUnavailableError,
+    DuplicateInvoiceNumberError,
+    InvoiceStateError,
     NoTariffFoundError,
     OcrUnavailableError,
     TariffConflictError,
+    ValidationFailedError,
     VerificationNeededError,
 )
 
 
 def _localize_error(tr, exc: Exception) -> str:
     """Localize known domain errors through the i18n callable."""
+    if isinstance(exc, ValidationFailedError):
+        return "; ".join(i.localized(tr) for i in exc.issues)
     if isinstance(exc, NoTariffFoundError):
         return tr("err_no_tariff", type=exc.subscriber_type, date=str(exc.effective_date))
     if isinstance(exc, TariffConflictError):
@@ -124,8 +130,6 @@ class InvoiceService:
         fee_report = ValidationEngine.validate_fees(req.fees)
         combined = ValidationReport(issues=report.issues + date_report.issues + fee_report.issues)
         if combined.has_errors:
-            from ..domain.errors import ValidationFailedError
-
             raise ValidationFailedError(combined.errors)
 
         target_date = req.current_read_date or req.previous_read_date
@@ -159,6 +163,10 @@ class InvoiceService:
         result = VerifyResult(report=ValidationReport())
         try:
             result.calc, _ = self.calculate(req)
+        except ValidationFailedError as exc:
+            # Keep the individual issues so the page can localize each one.
+            result.report.issues.extend(exc.issues)
+            return result
         except VerificationNeededError as exc:
             result.report.issues.append(Issue("VERIFY_READING", "ERROR", str(exc)))
             return result
@@ -172,14 +180,14 @@ class InvoiceService:
     def next_invoice_no(self, issue_date: Optional[dt.date] = None) -> str:
         year = (issue_date or dt.date.today()).year
         prefix = f"INV-{year}-"
-        existing = self.invoices.search(limit=500)
+        # Only this year's numbers matter, and only the number column is read (the old code
+        # loaded up to 500 full invoices, and missed the highest number beyond that).
         max_no = 0
-        for inv in existing:
-            if inv.invoice_no.startswith(prefix):
-                try:
-                    max_no = max(max_no, int(inv.invoice_no.rsplit("-", 1)[1]))
-                except ValueError:
-                    continue
+        for number in self.invoices.invoice_numbers(prefix):
+            try:
+                max_no = max(max_no, int(number[len(prefix):]))
+            except ValueError:
+                continue    # e.g. "INV-2026-0007-D2" from a duplicate renumbering
         return f"{prefix}{max_no + 1:04d}"
 
 
@@ -202,6 +210,7 @@ class InvoiceService:
         issue_date = issue_date or dt.date.today()
         if isinstance(issue_date, dt.datetime):
             issue_date = issue_date.date()
+        auto_number = not invoice_no
         invoice_no = invoice_no or self.next_invoice_no(issue_date)
 
         invoice = Invoice(
@@ -212,8 +221,8 @@ class InvoiceService:
             subscriber_name=subscriber.name if subscriber else "",
             subscriber_type=schedule.subscriber_type,
             issue_date=issue_date,
-            previous_read_date=previous_read_date or issue_date,
-            current_read_date=current_read_date or issue_date,
+            previous_read_date=previous_read_date or calc.previous_read_date or issue_date,
+            current_read_date=current_read_date or calc.current_read_date or issue_date,
             previous_reading=calc.reading.previous_reading if calc.reading else Decimal("0"),
             current_reading=calc.reading.current_reading if calc.reading else Decimal("0"),
             consumption_kwh=calc.reading.consumption_kwh if calc.reading else Decimal("0"),
@@ -254,7 +263,15 @@ class InvoiceService:
 
         run_id = str(uuid.uuid4())
         invoice.audit_run_id = run_id
-        self.invoices.save(invoice, reading, charges)
+        for attempt in range(3):
+            try:
+                self.invoices.save(invoice, reading, charges)
+                break
+            except DuplicateInvoiceNumberError:
+                # a concurrent writer took the number; an explicit number is the caller's problem
+                if not auto_number or attempt == 2:
+                    raise
+                invoice.invoice_no = self.next_invoice_no(issue_date)
         if audit:
             self._append_audit("CALCULATE", calc, invoice, schedule, user, run_id, scenario)
         self._commit()
@@ -288,10 +305,13 @@ class InvoiceService:
             official_amount=invoice.official_amount,
         )
         calc, schedule = self.calculate(req)
-        old_status = invoice.status
+        if invoice.status != InvoiceStatus.ACTIVE:
+            raise InvoiceStateError("not_active")
+        if invoice.paid_amount > calc.total_due:
+            raise InvoiceStateError("overpaid")      # nothing has been changed yet
         invoice.status = InvoiceStatus.RECALCULATED
         self.invoices.save(invoice, reading, charges)
-        return self.save_calculation(
+        new_invoice = self.save_calculation(
             calc, schedule,
             subscriber=(self.subscribers.get(invoice.subscriber_id) if invoice.subscriber_id else None),
             issue_date=invoice.issue_date,
@@ -302,6 +322,55 @@ class InvoiceService:
             scenario=reading.scenario,
             user=user,
         )
+        # payments belong to the live invoice; before this they stayed on the superseded one,
+        # so analytics (active invoices only) lost them
+        if invoice.paid_amount.raw > 0:
+            self.invoices.transfer_payments(invoice_id, new_invoice.id)
+            if self.uow:
+                self.uow.commit()
+            new_invoice = self.invoices.get(new_invoice.id)
+        return new_invoice
+
+    # ----- lifecycle ----------------------------------------------------
+    def cancel(self, invoice_id: int, user: str = "local") -> Invoice:
+        """Soft-delete: the invoice stays in the database as CANCELLED.
+
+        Physically deleting rows broke the numbering sequence and erased the audit trail.
+        An invoice with recorded payments cannot be cancelled (a refund must be handled first).
+        """
+        invoice = self.invoices.get(invoice_id)
+        if invoice is None:
+            raise ValueError("invoice not found")
+        if invoice.status != InvoiceStatus.ACTIVE:
+            raise InvoiceStateError("not_active")
+        if invoice.paid_amount.raw > 0:
+            raise InvoiceStateError("has_payments")
+        self.invoices.set_status(invoice_id, InvoiceStatus.CANCELLED)
+        self.audit.append(AuditLogEntry(
+            action="INVOICE_CANCEL", entity_type="INVOICE", entity_id=invoice_id, user=user,
+            description=f"Invoice {invoice.invoice_no} cancelled",
+            details_json=json.dumps({"invoice_no": invoice.invoice_no}, ensure_ascii=False),
+            invoice_id=invoice_id))
+        if self.uow:
+            self.uow.commit()
+        return self.invoices.get(invoice_id)
+
+    def suggested_previous_debt(self, subscriber_id: int) -> Money:
+        """Debt to pre-fill on the subscriber's NEXT invoice.
+
+        The newest active invoice already carries every older unpaid amount (its ``total_due``
+        includes ``previous_debt``), so its remaining balance is the whole outstanding debt.
+        Summing all unpaid invoices would count the same debt several times.
+        It is only a suggestion: the user can edit the field.
+        """
+        latest = self.invoices.search(subscriber_id=subscriber_id, status=InvoiceStatus.ACTIVE, limit=1)
+        if not latest:
+            # first invoice in the app: the opening balance recorded on the subscriber, if any
+            subscriber = self.subscribers.get(subscriber_id)
+            opening = subscriber.previous_debt if subscriber is not None else Money.zero()
+            return opening if opening.raw > 0 else Money.zero()
+        remaining = latest[0].total_due - latest[0].paid_amount
+        return remaining if remaining.raw > 0 else Money.zero()
 
     # ----- audit --------------------------------------------------------
     def _append_audit(self, action: str, calc: InvoiceCalculation, invoice: Invoice,
@@ -391,7 +460,8 @@ class TariffService:
             action="TARIFF_SAVE", entity_type="TARIFF", entity_id=saved.id,
             description=self.tr("svc_audit_tariff_save", name=saved.name_ar or saved.name_en,
                                 v=saved.version),
-            details_json='{"name_ar": "%s", "version": "%s"}' % (saved.name_ar, saved.version),
+            details_json=json.dumps({"name_ar": saved.name_ar, "version": saved.version},
+                                    ensure_ascii=False),
             tariff_schedule_id=saved.id, user=user,
         ))
         if self.uow is not None:
@@ -454,7 +524,9 @@ class SubscriberService:
         self._commit()
         return m
 
-    def meters(self, subscriber_id: int):
+    def meters_of(self, subscriber_id: int):
+        # renamed from ``meters``: the __init__ attribute ``self.meters`` (the repo)
+        # shadowed the method, so calling it raised "'...Repository' is not callable"
         return self.meters.list_for_subscriber(subscriber_id)
 
     def set_debt(self, subscriber_id: int, amount: Money, reason: str = "") -> None:

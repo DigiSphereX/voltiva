@@ -87,12 +87,30 @@ class InvoiceRepository(ABC):
     @abstractmethod
     def list_recent(self, limit: int = 50) -> list[Invoice]: ...
 
+    def list_payments(self, invoice_id: int) -> list:
+        return []
+
+    def set_status(self, invoice_id: int, status) -> None:
+        raise NotImplementedError
+
+    def transfer_payments(self, from_id: int, to_id: int) -> None:
+        raise NotImplementedError
+
+    def active_snapshot(self) -> list[Invoice]:
+        """All ACTIVE invoices, newest first. Implementations may cache."""
+        return self.list_recent(limit=1_000_000)
+
+    def invoice_numbers(self, prefix: str = "") -> list[str]:
+        return [i.invoice_no for i in self.search(query=prefix, limit=1_000_000)
+                if i.invoice_no.startswith(prefix)]
+
     @abstractmethod
     def search(
         self,
         *,
         query: str = "",
         subscriber_id: int | None = None,
+        status=None,
         payment_status: PaymentStatus | None = None,
         date_from: dt.date | None = None,
         date_to: dt.date | None = None,

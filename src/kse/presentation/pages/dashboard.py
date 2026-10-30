@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from html import escape
+
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QTableWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from .. import theme
 from ..charts import StatCard
-from ..widgets import money_display, status_chip, digits
+from ..widgets import CardGrid, DataTable, chip_cell, configure_table, digits, money_display
 from ...domain.enums import PaymentStatus
 from ...domain.money import fmt_quantity
 
@@ -68,23 +71,16 @@ class DashboardPage(QWidget):
         hero_layout.addLayout(chips_col)
 
         # KPI cards
+        tc = theme.colors()  # theme tokens: correct contrast in BOTH light and dark
         self.cards = [
-            StatCard(self.tr("dash_total_invoices"), icon="◈",
-                     accent="#3D6CFF"),
-            StatCard(self.tr("dash_total_kwh"), icon="⚡",
-                     accent="#2FC290"),
-            StatCard(self.tr("dash_total_amount"), icon="◉",
-                     accent="#F2B04C"),
-            StatCard(self.tr("dash_paid_amount"), icon="✓",
-                     accent="#27C08A"),
-            StatCard(self.tr("dash_unpaid_amount"), icon="◌",
-                     accent="#F0524F"),
-            StatCard(self.tr("dash_unpaid_count"), icon="◐",
-                     accent="#F2944C"),
-            StatCard(self.tr("dash_avg_invoice"), icon="◐",
-                     accent="#8B5CF6"),
-            StatCard(self.tr("dash_cost_per_kwh"), icon="÷",
-                     accent="#2DD4BF"),
+            StatCard(self.tr("dash_total_invoices"), icon="document", accent=tc["accent"]),
+            StatCard(self.tr("dash_total_kwh"), icon="bolt", accent=tc["success"]),
+            StatCard(self.tr("dash_total_amount"), icon="coins", accent=tc["gold"]),
+            StatCard(self.tr("dash_paid_amount"), icon="check", accent=tc["success"]),
+            StatCard(self.tr("dash_unpaid_amount"), icon="alert", accent=tc["danger"]),
+            StatCard(self.tr("dash_unpaid_count"), icon="clock", accent=tc["orange"]),
+            StatCard(self.tr("dash_avg_invoice"), icon="bars", accent=tc["violet"]),
+            StatCard(self.tr("dash_cost_per_kwh"), icon="gauge", accent=tc["teal"]),
         ]
         _kpi_tt = {
             0: "tt_kpi_invoices",
@@ -98,19 +94,17 @@ class DashboardPage(QWidget):
         }
         for i, card in enumerate(self.cards):
             card.setToolTip(self.tr(_kpi_tt[i]))
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for i, card in enumerate(self.cards):
-            grid.addWidget(card, i // 4, i % 4)
+        self.card_grid = CardGrid(self.cards, min_card_width=200, max_columns=4)
 
         # recent invoices
         recent = QFrame()
         recent.setObjectName("Card")
         recent_layout = QVBoxLayout(recent)
-        recent_layout.setContentsMargins(16, 14, 16, 16)
+        recent_layout.setContentsMargins(18, 15, 18, 18)
         recent_layout.setSpacing(12)
 
         recent_head = QHBoxLayout()
+        recent_head.setSpacing(10)
         recent_title = QLabel(self.tr("dash_recent"))
         recent_title.setObjectName("CardTitle")
         view_all = QPushButton(self.tr("dash_recent_view_all"))
@@ -121,7 +115,7 @@ class DashboardPage(QWidget):
         recent_head.addStretch(1)
         recent_head.addWidget(view_all)
 
-        self.recent_table = QTableWidget()
+        self.recent_table = DataTable()
         self.recent_table.setToolTip(self.tr("tt_dash_recent"))
         self.recent_table.setColumnCount(5)
         self.recent_table.setHorizontalHeaderLabels([
@@ -129,58 +123,72 @@ class DashboardPage(QWidget):
             self.tr("dash_recent_name"), self.tr("dash_recent_amount"),
             self.tr("dash_recent_status"),
         ])
-        self.recent_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch)
-        self.recent_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.recent_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.recent_table.setAlternatingRowColors(True)
-        self.recent_table.verticalHeader().setVisible(False)
-        self.recent_table.verticalHeader().setDefaultSectionSize(40)
-        self.recent_table.setMinimumHeight(220)
+        configure_table(
+            self.recent_table,
+            aligns=(Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignLeft,
+                    Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignRight,
+                    Qt.AlignmentFlag.AlignHCenter),
+            widths={0: 152, 1: 112, 3: 148, 4: 112}, stretch=(2,),
+            row_height=theme.Metrics.ROW_H, header_height=theme.Metrics.HEADER_H)
+        self.recent_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent_table.set_empty_text(self.tr("il_none"))
         self.recent_table.doubleClicked.connect(self._open_recent)
         self.recent_table.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
         recent_layout.addLayout(recent_head)
-        recent_layout.addWidget(self.recent_table, 1)
+        recent_layout.addWidget(self.recent_table)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 18, 24, 18)
-        layout.setSpacing(14)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(
+            theme.Metrics.PAGE_MARGIN, 18, theme.Metrics.PAGE_MARGIN, 18)
+        layout.setSpacing(theme.Metrics.PAGE_SPACING)
         layout.addWidget(hero)
-        layout.addLayout(grid)
-        layout.addWidget(recent, 1)
+        layout.addWidget(self.card_grid)
+        layout.addWidget(recent)
+        layout.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def refresh(self) -> None:
         stats = self.app.analytics.dashboard()
-        self.cards[0].set_value(str(stats["total_invoices"]))
+        self.cards[0].set_value(digits(str(stats["total_invoices"])))
         self.cards[1].set_value(f"{digits(fmt_quantity(stats['total_kwh']))} {self.tr('unit_kwh')}")
         self.cards[2].set_value(money_display(stats["total_amount"]))
         self.cards[3].set_value(money_display(stats["total_paid"]))
         self.cards[4].set_value(money_display(stats["total_unpaid"]))
-        self.cards[5].set_value(str(stats["unpaid_count"]))
+        self.cards[5].set_value(digits(str(stats["unpaid_count"])))
         self.cards[6].set_value(money_display(stats["avg_invoice"]))
         self.cards[7].set_value(f"{digits(stats['cost_per_kwh'])} / {self.tr('unit_kwh')}")
 
         c = self.app.repos["invoices"].list_recent(limit=5)
-        tc = theme.colors()
-        self.unpaid_chip.setText(
-            f"{self.tr('dash_unpaid_count')}: {stats['unpaid_count']} — {money_display(stats['total_unpaid'])}")
-        self.unpaid_chip.setStyleSheet(
-            f"background-color: {tc['danger_rgba']}; color: {tc['danger']};"
-            "border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700;")
+        # Text was red/green on the blue-purple hero (contrast 1.1-2.3:1, unreadable).
+        # Now: white text on the QSS dark overlay, with the status colour as a pale dot.
         rate = digits(f"{float(stats['collection_rate']):.1f}")
-        self.rate_chip.setText(f"{self.tr('dash_collection_rate')}: {rate}%")
-        self.rate_chip.setStyleSheet(
-            f"background-color: {tc['success_rgba']}; color: {tc['success']};"
-            "border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700;")
+        self._set_hero_chip(
+            self.unpaid_chip, "#FFB4B2",
+            f"{self.tr('dash_unpaid_count')}: {digits(str(stats['unpaid_count']))} — {money_display(stats['total_unpaid'])}")
+        self._set_hero_chip(self.rate_chip, "#8DF0C8", f"{self.tr('dash_collection_rate')}: {rate}%")
 
         self._fill_recent(c)
 
-    def _fill_recent(self, invoices) -> None:
-        from .. import theme
+    @staticmethod
+    def _set_hero_chip(label: QLabel, dot_color: str, text: str) -> None:
+        label.setTextFormat(Qt.TextFormat.RichText)
+        label.setText(f'<span style="color:{dot_color}">●</span>&nbsp;&nbsp;{escape(text)}')
 
+    def _fill_recent(self, invoices) -> None:
         c = theme.colors()
         self.recent_table.setRowCount(len(invoices))
+        right = Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
+        left = Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
         for row, inv in enumerate(invoices):
             paid = inv.payment_status
             if paid == PaymentStatus.PAID:
@@ -189,19 +197,26 @@ class DashboardPage(QWidget):
                 chip_text, chip_color = self.tr("status_partial"), c["warn"]
             else:
                 chip_text, chip_color = self.tr("status_unpaid"), c["danger"]
-            items = [
-                inv.invoice_no or "—",
-                inv.issue_date.strftime("%d/%m/%Y"),
-                inv.subscriber_name or inv.account_no,
-                money_display(inv.total_due),
+            cells = [
+                (inv.invoice_no or "—", left),
+                (digits(inv.issue_date.strftime("%d/%m/%Y")), left),
+                (inv.subscriber_name or digits(inv.account_no), left),
+                (money_display(inv.total_due), right),
             ]
-            for col, text in enumerate(items):
+            for col, (text, align) in enumerate(cells):
                 item = QTableWidgetItem(str(text))
-                item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(c["text"]))
+                item.setTextAlignment(align)
+                item.setForeground(QColor(c["text"]))
+                if col == 0:
+                    font = QFont(item.font())
+                    font.setWeight(QFont.Weight.DemiBold)
+                    item.setFont(font)
                 self.recent_table.setItem(row, col, item)
-            chip = status_chip(chip_text, chip_color)
-            self.recent_table.setCellWidget(row, 4, chip)
-            self.recent_table.setRowHeight(row, 38)
+            self.recent_table.setCellWidget(row, 4, chip_cell(chip_text, chip_color))
+            self.recent_table.setRowHeight(row, theme.Metrics.ROW_H)
+        rows = max(len(invoices), 1)
+        visible_height = theme.Metrics.HEADER_H + rows * theme.Metrics.ROW_H + 2
+        self.recent_table.setFixedHeight(visible_height if invoices else max(visible_height, 150))
 
     def _open_recent(self, index) -> None:
         inv = self.app.repos["invoices"].list_recent(limit=5)
