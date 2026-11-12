@@ -38,6 +38,9 @@ the invoices already stored are fully preserved.
   translates its own chrome, so a non-English user sees a translated dialog with
   an English technical detail line.
 - **Launcher renamed** from `run_kahraba.bat` to `run_voltiva.bat`.
+- **Font licence shipped.** The bundled Cairo typeface is licensed under the SIL
+  Open Font License 1.1, so its licence text now ships next to the font files in
+  `assets/fonts/OFL.txt`.
 - **Error messages are translated in every language.** The seven dynamic
   payment/invoice-state errors now exist in all nine dictionaries instead of
   falling back to English at runtime.

@@ -143,7 +143,9 @@ a bill must never leave the machine.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The bundled Cairo typeface in `assets/fonts/` is
+licensed under the SIL Open Font License 1.1 — see
+[`assets/fonts/OFL.txt`](assets/fonts/OFL.txt).
 
 ---
 
