@@ -31,15 +31,14 @@ def nice_ticks(max_value: float, target: int = 4, integer: bool = False) -> tupl
     return [i * step for i in range(n + 1)], top
 
 
-def compact_number(value: float, arabic: bool = False) -> str:
-    """1_250_000 -> '1.25M' (or Arabic suffixes); small numbers keep full precision."""
+def compact_number(value: float) -> str:
+    """1_250_000 -> '1.25M'; small numbers keep full precision."""
     sign = "-" if value < 0 else ""
     v = abs(value)
-    units = ((1e9, "B", " مليار"), (1e6, "M", " مليون"), (1e3, "K", " ألف"))
-    for limit, latin, ar in units:
+    for limit, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
         if v >= limit:
             text = f"{v / limit:.2f}".rstrip("0").rstrip(".")
-            return f"{sign}{text}{ar if arabic else latin}"
+            return f"{sign}{text}{suffix}"
     if abs(v - round(v)) < 1e-9:
         return f"{sign}{v:,.0f}"
     return f"{sign}{v:,.2f}".rstrip("0").rstrip(".")
@@ -60,7 +59,7 @@ def slot_layout(n: int, plot_left: float, plot_width: float, *, max_bar: float =
                 fill: float = 0.62, rtl: bool = False) -> list[Slot]:
     """Equal slots; bars are centred in them and capped at ``max_bar`` so two or three
     data points no longer turn into two giant blocks. ``rtl`` mirrors the time axis
-    (oldest month on the right, as Arabic readers expect)."""
+    (oldest month on the right)."""
     if n <= 0 or plot_width <= 0:
         return []
     slot_w = plot_width / n

@@ -36,7 +36,7 @@ from .models import (
     TariffSchedule,
     TariffTier,
 )
-from .money import CURRENCY, CURRENCY_AR, MONEY_SCALE, Money, arabic_digits, fmt_quantity, round_money
+from .money import CURRENCY, DEFAULT_CURRENCY_CODE, MONEY_SCALE, Money, fmt_number, fmt_quantity, latin_digits, money_label, round_money
 from .services.consumption import ConsumptionCalculator, ConsumptionResult
 from .services.debt import DebtCalculator
 from .services.fees import FeeCalculator, FeeResult
@@ -63,7 +63,7 @@ __all__ = [
     "ConsumptionCalculator",
     "ConsumptionResult",
     "CURRENCY",
-    "CURRENCY_AR",
+    "DEFAULT_CURRENCY_CODE",
     "MONEY_SCALE",
     "DataSource",
     "Debt",
@@ -105,8 +105,10 @@ __all__ = [
     "ValidationFailedError",
     "ValidationReport",
     "VerificationNeededError",
-    "arabic_digits",
     "build_invoice_charges_from_tariff",
+    "fmt_number",
     "fmt_quantity",
+    "latin_digits",
+    "money_label",
     "round_money",
 ]

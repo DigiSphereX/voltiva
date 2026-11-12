@@ -18,7 +18,8 @@ from ..errors import ReadingInvalidError, VerificationNeededError
 from ..money import round_consumption
 
 VERIFICATION_MESSAGE = (
-    "القراءة الحالية أقل من القراءة السابقة --- يرجى التحقق من تبديل العداد أو إدخال القراءة."
+    "The current reading is lower than the previous reading — check for a meter "
+    "replacement or correct the reading."
 )
 
 
@@ -61,18 +62,18 @@ class ConsumptionCalculator:
             base = Decimal(replacement_base or 0)
             if base > 0:
                 raw = base + curr
-                notes.append(f"استبدال/إعادة ضبط: استهلاك سابق {base} + قراءة جديدة {curr}")
+                notes.append(f"Replacement/reset: previous usage {base} + new reading {curr}")
             else:
                 raw = curr
                 notes.append(
-                    "تم قبول الاستهلاك لأن الحساب بسياق استبدال/إعادة ضبط، "
-                    "لكن يجب إضافة الاستهلاك السابق (إن وُجد) يدوياً."
+                    "Consumption accepted because the calculation is in a replacement/reset "
+                    "context, but the previous usage (if any) must be added manually."
                 )
         elif curr < prev:
             if scenario == MeterScenario.ROLLOVER:
                 if max_reading is None or max_reading <= 0:
                     raise VerificationNeededError(
-                        "لحساب Rollover يجب إدخال سعة العداد القصوى (max_reading)."
+                        "Rollover needs the meter's maximum capacity (max_reading)."
                     )
                 raw = Decimal(max_reading) - prev + curr
                 notes.append(f"Rollover: ({max_reading} - {prev}) + {curr}")
@@ -83,7 +84,7 @@ class ConsumptionCalculator:
         else:
             raw = curr - prev
             if raw == 0:
-                notes.append("الاستهلاك = صفر (القراءتان متساويتان).")
+                notes.append("Consumption = zero (both readings are equal).")
 
         adjusted = round_consumption(raw * mult)
 
@@ -105,13 +106,13 @@ def _as_reading(value, name: str) -> Decimal:
 
     raw_text = str(value).strip()
     if raw_text.startswith("-") or latin_digits(raw_text).startswith("-"):
-        raise ReadingInvalidError("لا يمكن أن تكون القراءة سالبة.")
+        raise ReadingInvalidError("Readings cannot be negative.")
     try:
         d = Money.parse_reading(raw_text)
     except (ValueError, TypeError, ArithmeticError) as exc:
-        raise ReadingInvalidError(f"قراءة غير صالحة ({name}): {value} — {exc}") from exc
+        raise ReadingInvalidError(f"Invalid reading ({name}): {value} — {exc}") from exc
     if d < 0:
-        raise ReadingInvalidError("لا يمكن أن تكون القراءة سالبة.")
+        raise ReadingInvalidError("Readings cannot be negative.")
     return d
 
 
@@ -121,7 +122,7 @@ def _as_multiplier(value) -> Decimal:
     try:
         d = Money.parse_reading(str(value))
     except (ValueError, TypeError, ArithmeticError) as exc:
-        raise ReadingInvalidError(f"معامل قياس غير صالح: {value} — {exc}") from exc
+        raise ReadingInvalidError(f"Invalid meter multiplier: {value} — {exc}") from exc
     if d <= 0:
-        raise ReadingInvalidError("معامل القياس يجب أن يكون أكبر من الصفر.")
+        raise ReadingInvalidError("The meter multiplier must be greater than zero.")
     return d

@@ -28,8 +28,7 @@ def make_schedule(subscriber_type=SubscriberType.RESIDENTIAL, method=TariffMetho
     import datetime as dt
 
     s = TariffSchedule(
-        name_ar=name,
-        name_en=name,
+        name=name,
         subscriber_type=subscriber_type,
         method=method,
         service_zone=service_zone,

@@ -37,7 +37,7 @@ def _invoice(inv_svc, sub_svc, account="ACC-1", name="Ali", cur="500", debt=None
 # ------------------------------------------------------------------ auto backup
 class TestAutoBackup:
     def test_creates_validated_snapshot_with_live_data(self, tmp_path):
-        live = tmp_path / "kahraba.db"
+        live = tmp_path / "voltiva.db"
         c = dbm.connect(live)
         c.execute("INSERT INTO Settings(key,value,updated_at) VALUES('k','v','now')")
         c.commit()
@@ -50,7 +50,7 @@ class TestAutoBackup:
         c.close(); copy.close()
 
     def test_keeps_only_newest_and_never_touches_manual_backups(self, tmp_path):
-        live = tmp_path / "kahraba.db"
+        live = tmp_path / "voltiva.db"
         c = dbm.connect(live)
         manual = backup_database(live)                       # manual backup lives next to the db
         folder = tmp_path / "backups"
@@ -67,7 +67,7 @@ class TestAutoBackup:
         c.close()
 
     def test_failure_leaves_no_partial_file(self, tmp_path):
-        live = tmp_path / "kahraba.db"
+        live = tmp_path / "voltiva.db"
         c = dbm.connect(live)
         c.close()                                            # closed connection -> backup must fail
         with pytest.raises(Exception):
@@ -234,23 +234,23 @@ class TestReceipt:
         repos["invoices"].set_payment(a.id, Money.of(1234), dt.date(2024, 3, 3), "TRANSFER", "<script>x</script>")
         inv = repos["invoices"].get(a.id)
         pay = repos["invoices"].list_payments(a.id)[0]
-        html = build_receipt_html(inv, pay, lang="en", currency="USD")
+        html = build_receipt_html(inv, pay, currency="USD")
         assert f"R-{pay.id:06d}" in html and "2024-03-03" in html and "1,234" in html
         assert "&lt;b&gt;Ali&lt;/b&gt; &amp; Sons" in html and "<script>" not in html
         assert f"{(inv.total_due - Money.of(1234)).raw:,}".split(".")[0] in html     # remaining balance shown
 
-    def test_receipt_rtl_for_arabic(self, mem_db):
+    def test_receipt_is_always_ltr(self, mem_db):
         inv_svc, sub_svc, repos = _ctx(mem_db)
         a = _invoice(inv_svc, sub_svc)
         repos["invoices"].set_payment(a.id, Money.of(10), dt.date(2024, 3, 3), "CASH", "")
         pay = repos["invoices"].list_payments(a.id)[0]
-        assert "dir='rtl'" in build_receipt_html(repos["invoices"].get(a.id), pay, lang="ar")
+        assert "dir='ltr'" in build_receipt_html(repos["invoices"].get(a.id), pay)
 
 
 def test_dynamic_invoice_state_keys_exist():
     from kse.presentation import i18n
     for reason in InvoiceStateError._MESSAGES:
-        for lang in ("en", "ar"):
+        for lang in i18n.LANGS:
             assert f"err_invoice_{reason}" in i18n._STRINGS[lang], (reason, lang)
 
 

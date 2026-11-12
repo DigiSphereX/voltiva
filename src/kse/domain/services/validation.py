@@ -42,7 +42,7 @@ class Issue:
     def localized(self, tr) -> str:
         """Localized message via an i18n translation callable (tr(key, **kwargs)).
 
-        Codes without a vld_* key fall back to the original (Arabic) message.
+        Codes without a vld_* key fall back to the original message.
         """
         if self.code not in _VLD_KEYS:
             return self.message
@@ -92,28 +92,28 @@ class ValidationEngine:
         curr_text = str(current).strip()
 
         if prev_text.startswith("-"):
-            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "القراءة السابقة لا يمكن أن تكون سالبة.", "previous_reading"))
+            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "The previous reading cannot be negative.", "previous_reading"))
         if curr_text.startswith("-"):
-            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "القراءة الحالية لا يمكن أن تكون سالبة.", "current_reading"))
+            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "The current reading cannot be negative.", "current_reading"))
 
         prev = ValidationEngine.parse_reading(previous)
         curr = ValidationEngine.parse_reading(current)
 
         if prev is None:
-            report.issues.append(Issue("READING_INVALID", "ERROR", "القراءة السابقة غير صالحة (يجب أن تكون رقمًا صحيحاً).", "previous_reading"))
+            report.issues.append(Issue("READING_INVALID", "ERROR", "The previous reading is invalid (it must be a whole number).", "previous_reading"))
         if curr is None:
-            report.issues.append(Issue("READING_INVALID", "ERROR", "القراءة الحالية غير صالحة (يجب أن تكون رقمًا صحيحاً).", "current_reading"))
+            report.issues.append(Issue("READING_INVALID", "ERROR", "The current reading is invalid (it must be a whole number).", "current_reading"))
         if prev is not None and prev < 0:
-            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "القراءة السابقة لا يمكن أن تكون سالبة.", "previous_reading"))
+            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "The previous reading cannot be negative.", "previous_reading"))
         if curr is not None and curr < 0:
-            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "القراءة الحالية لا يمكن أن تكون سالبة.", "current_reading"))
+            report.issues.append(Issue("READING_NEGATIVE", "ERROR", "The current reading cannot be negative.", "current_reading"))
 
         if prev is not None and curr is not None and scenario in (MeterScenario.NORMAL, MeterScenario.MULTIPLIER):
             if curr < prev:
                 report.issues.append(Issue(
                     "READING_DECREASE",
                     "ERROR",
-                    "القراءة الحالية أقل من السابقة --- يرجى التحقق من تبديل العداد أو إدخال القراءة.",
+                    "The current reading is lower than the previous one — check for a meter replacement or a mistyped reading.",
                     "current_reading",
                 ))
             # consumption non-negative
@@ -123,30 +123,30 @@ class ValidationEngine:
     def validate_dates(*, previous_date: Optional[dt.date], current_date: Optional[dt.date], issue_date: Optional[dt.date]) -> ValidationReport:
         report = ValidationReport()
         if previous_date is None:
-            report.issues.append(Issue("DATE_MISSING", "ERROR", "تاريخ القراءة السابقة غير محدد.", "previous_read_date"))
+            report.issues.append(Issue("DATE_MISSING", "ERROR", "The previous reading date is missing.", "previous_read_date"))
         if current_date is None:
-            report.issues.append(Issue("DATE_MISSING", "ERROR", "تاريخ القراءة الحالية غير محدد.", "current_read_date"))
+            report.issues.append(Issue("DATE_MISSING", "ERROR", "The current reading date is missing.", "current_read_date"))
         if previous_date is not None and current_date is not None:
             if current_date < previous_date:
-                report.issues.append(Issue("DATE_ORDER", "ERROR", "تاريخ القراءة الحالية قبل تاريخ القراءة السابقة.", "current_read_date"))
+                report.issues.append(Issue("DATE_ORDER", "ERROR", "The current reading date is before the previous reading date.", "current_read_date"))
             elif current_date == previous_date:
                 # A zero-day period would divide the 30-day tier limits by 30 and
                 # multiply the bill (tests: 1 000 kWh billed as a single day).
                 report.issues.append(Issue(
                     "DATE_NOT_AFTER", "ERROR",
-                    "تاريخ القراءة الحالية يجب أن يكون بعد تاريخ القراءة السابقة.",
+                    "The current reading date must be after the previous reading date.",
                     "current_read_date"))
         if issue_date is not None and current_date is not None and issue_date < current_date:
-            report.issues.append(Issue("ISSUE_DATE_BEFORE_READING", "ERROR", "تاريخ الإصدار قبل تاريخ القراءة الحالية.", "issue_date"))
+            report.issues.append(Issue("ISSUE_DATE_BEFORE_READING", "ERROR", "The issue date is before the current reading date.", "issue_date"))
         return report
 
     @staticmethod
     def validate_account_numbers(account_no: str) -> ValidationReport:
         report = ValidationReport()
         if not account_no or not str(account_no).strip():
-            report.issues.append(Issue("ACCOUNT_MISSING", "ERROR", "رقم الحساب مطلوب.", "account_no"))
+            report.issues.append(Issue("ACCOUNT_MISSING", "ERROR", "The account number is required.", "account_no"))
         elif not ACCOUNT_NO_RE.match(latin_digits(str(account_no).strip())):
-            report.issues.append(Issue("ACCOUNT_FORMAT", "ERROR", "رقم الحساب غير صحيح حسب صيغة الحساب (أرقام من 4 إلى 20).", "account_no"))
+            report.issues.append(Issue("ACCOUNT_FORMAT", "ERROR", "The account number format is invalid (4 to 20 digits).", "account_no"))
         return report
 
     @staticmethod
@@ -160,31 +160,31 @@ class ValidationEngine:
             if not isinstance(c, InvoiceCharge):
                 continue
             if c.amount < Money.zero() and c.category != ChargeCategory.DISCOUNT:
-                report.issues.append(Issue("NEGATIVE_FEE", "ERROR", f"الرسم «{c.name}» لا يمكن أن يكون سالباً (لاستخدام الخصم اختر نوع خصم).", f"charge[{idx}]", name=c.name))
+                report.issues.append(Issue("NEGATIVE_FEE", "ERROR", f"The charge \"{c.name}\" cannot be negative (use the Discount category for deductions).", f"charge[{idx}]", name=c.name))
             if c.category == ChargeCategory.DISCOUNT and c.amount < Money.zero():
-                report.issues.append(Issue("DOUBLE_NEGATIVE_DISCOUNT", "WARNING", f"الخصم «{c.name}» مدخل بقيمة سالبة (سيُعامل الرقم كما هو).", f"charge[{idx}]", name=c.name))
+                report.issues.append(Issue("DOUBLE_NEGATIVE_DISCOUNT", "WARNING", f"The discount \"{c.name}\" was entered as a negative value (the number will be used as-is).", f"charge[{idx}]", name=c.name))
         return report
 
     @staticmethod
     def validate_amount(amount: Money) -> ValidationReport:
         report = ValidationReport()
         if amount < Money.zero():
-            report.issues.append(Issue("NEGATIVE_AMOUNT", "ERROR", "المبلغ النهائي سالب وغير منطقي.", "total"))
+            report.issues.append(Issue("NEGATIVE_AMOUNT", "ERROR", "The final amount is negative and cannot be valid.", "total"))
         return report
 
     @staticmethod
     def validate_tariff(schedule: TariffSchedule) -> ValidationReport:
         report = ValidationReport()
 
-        if not schedule.name_ar.strip() and not schedule.name_en.strip():
-            report.issues.append(Issue("TARIFF_NAME", "ERROR", "اسم التعرفة مطلوب."))
+        if not schedule.name.strip():
+            report.issues.append(Issue("TARIFF_NAME", "ERROR", "The tariff name is required."))
         if schedule.effective_from is None:
-            report.issues.append(Issue("TARIFF_DATE", "ERROR", "تاريخ بداية التعرفة مطلوب."))
+            report.issues.append(Issue("TARIFF_DATE", "ERROR", "The tariff start date is required."))
         if schedule.effective_to is not None and schedule.effective_from and schedule.effective_to <= schedule.effective_from:
-            report.issues.append(Issue("TARIFF_RANGE", "ERROR", "تاريخ النهاية يجب أن يكون بعد تاريخ البداية."))
+            report.issues.append(Issue("TARIFF_RANGE", "ERROR", "The end date must be after the start date."))
 
         if not schedule.tiers:
-            report.issues.append(Issue("TARIFF_NO_TIERS", "ERROR", "يجب إضافة شريحة واحدة على الأقل للتعرفة."))
+            report.issues.append(Issue("TARIFF_NO_TIERS", "ERROR", "The tariff needs at least one tier."))
             return report
 
         # tiers ordering/overlap/gap/negativity
@@ -195,29 +195,29 @@ class ValidationEngine:
         prev_to: Optional[Decimal] = None
         for t in sorted(schedule.tiers, key=lambda x: x.from_kwh):
             if t.from_kwh < 0 or t.rate_per_kwh < 0:
-                report.issues.append(Issue("TARIFF_NEGATIVE", "ERROR", "نقاط الشرائح والأسعار لا يمكن أن تكون سالبة."))
+                report.issues.append(Issue("TARIFF_NEGATIVE", "ERROR", "Tier bounds and rates cannot be negative."))
             if t.to_kwh is not None and t.to_kwh <= t.from_kwh:
                 # An inverted range gives the engine a negative quantity (a negative charge).
                 report.issues.append(Issue(
                     "TARIFF_BOUNDS", "ERROR",
-                    "نهاية كل شريحة يجب أن تكون أكبر من بدايتها."))
+                    "Each tier's upper bound must be greater than its lower bound."))
             if first:
                 if t.from_kwh not in (Decimal("0"), Decimal("1")):
                     report.issues.append(Issue(
                         "TARIFF_OVERLAP", "ERROR",
-                        "هناك تداخل أو فراغ بين الشرائح — يجب أن تبدأ الشريحة الأولى من 0 أو 1، "
-                        "وكل شريحة من قيمة نهاية السابقة (مثل 1-1500 ثم 1501-3000)."))
+                        "The tiers overlap or leave a gap — the first tier must start at 0 or 1, "
+                        "and each tier must start where the previous one ends (e.g. 1-1500 then 1501-3000)."))
             elif prev_to is None:
                 # The previous tier is open-ended (∞), so this one can never be reached;
                 # the engine would charge both tiers for the same kWh.
                 report.issues.append(Issue(
                     "TARIFF_OPEN_END", "ERROR",
-                    "الشريحة المفتوحة (∞) يجب أن تكون الشريحة الأخيرة."))
+                    "The open-ended tier (∞) must be the last one."))
             elif t.from_kwh not in (prev_to, prev_to + 1):
                 report.issues.append(Issue(
                     "TARIFF_OVERLAP", "ERROR",
-                    "هناك تداخل أو فراغ بين الشرائح — يجب أن تبدأ كل شريحة من نهاية سابقتها "
-                    "(مثل 1-1500 ثم 1501-3000، أو 0-1500 ثم 1500-3000)."))
+                    "The tiers overlap or leave a gap — each tier must start where the previous one "
+                    "ends (e.g. 1-1500 then 1501-3000, or 0-1500 then 1500-3000)."))
             prev_to = t.to_kwh
             first = False
         return report
@@ -226,7 +226,7 @@ class ValidationEngine:
     def validate_subscriber(s: Subscriber) -> ValidationReport:
         report = ValidationReport()
         if not s.name.strip():
-            report.issues.append(Issue("SUBSCRIBER_NAME", "ERROR", "اسم المشترك مطلوب."))
+            report.issues.append(Issue("SUBSCRIBER_NAME", "ERROR", "The subscriber name is required."))
         report.issues += ValidationEngine.validate_account_numbers(s.account_no).issues
         report.issues += ValidationEngine.validate_account_numbers(s.subscription_no).issues if s.subscription_no else []
         return report

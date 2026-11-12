@@ -1,8 +1,8 @@
 """Enums used across the billing domain.
 
-Stored in SQLite as TEXT names (enum `value`). `label_ar`/`label_en` are
-business *data* labels (used on reports/exports), UI chrome strings live in
-the i18n resource files instead.
+Stored in SQLite as TEXT names (enum `value`). `label` is a business *data*
+label (used on reports/exports); UI chrome strings live in the i18n resource
+files instead.
 """
 from __future__ import annotations
 
@@ -18,18 +18,7 @@ class SubscriberType(str, enum.Enum):
     OTHER = "OTHER"
 
     @property
-    def label_ar(self) -> str:
-        return {
-            "RESIDENTIAL": "منزلي",
-            "COMMERCIAL": "تجاري",
-            "INDUSTRIAL": "صناعي",
-            "AGRICULTURAL": "زراعي",
-            "GOVERNMENTAL": "حكومي",
-            "OTHER": "أخرى",
-        }[self.value]
-
-    @property
-    def label_en(self) -> str:
+    def label(self) -> str:
         return {
             "RESIDENTIAL": "Residential",
             "COMMERCIAL": "Commercial",
@@ -45,11 +34,7 @@ class TariffMethod(str, enum.Enum):
     PROGRESSIVE = "PROGRESSIVE"
 
     @property
-    def label_ar(self) -> str:
-        return {"FLAT": "تعرفة ثابتة", "PROGRESSIVE": "تعرفة شرائح"}[self.value]
-
-    @property
-    def label_en(self) -> str:
+    def label(self) -> str:
         return {"FLAT": "Flat rate", "PROGRESSIVE": "Progressive"}[self.value]
 
 
@@ -61,20 +46,12 @@ class ServiceZone(str, enum.Enum):
     which may keep its own tariff over the same subscriber type & period.
     """
 
-    TRADITIONAL = "TRADITIONAL"          # الشبكة الكلاسيكية (الجباية التقليدية)
-    SMART_METER = "SMART_METER"          # مناطق العداد الذكي / الخدمة والجباية الذكية
-    INVESTMENT = "INVESTMENT"            # شركات الاستثمار (الخدمة والجباية)
+    TRADITIONAL = "TRADITIONAL"          # classic public grid (traditional collection)
+    SMART_METER = "SMART_METER"            # smart-meter areas (smart service & collection)
+    INVESTMENT = "INVESTMENT"              # investment companies (service & collection)
 
     @property
-    def label_ar(self) -> str:
-        return {
-            "TRADITIONAL": "تقليدي",
-            "SMART_METER": "عداد ذكي",
-            "INVESTMENT": "استثمار",
-        }[self.value]
-
-    @property
-    def label_en(self) -> str:
+    def label(self) -> str:
         return {
             "TRADITIONAL": "Traditional",
             "SMART_METER": "Smart meter",
@@ -90,17 +67,7 @@ class MeterScenario(str, enum.Enum):
     ROLLOVER = "ROLLOVER"
 
     @property
-    def label_ar(self) -> str:
-        return {
-            "NORMAL": "عداد طبيعي",
-            "MULTIPLIER": "عداد بمعامل قياس",
-            "REPLACEMENT": "استبدال العداد",
-            "RESET": "إعادة ضبط (Reset)",
-            "ROLLOVER": "Rollover",
-        }[self.value]
-
-    @property
-    def label_en(self) -> str:
+    def label(self) -> str:
         return {
             "NORMAL": "Normal meter",
             "MULTIPLIER": "Multiplier meter",
@@ -126,10 +93,6 @@ class PaymentStatus(str, enum.Enum):
     PARTIAL = "PARTIAL"
     PAID = "PAID"
 
-    @property
-    def label_ar(self) -> str:
-        return {"UNPAID": "غير مدفوعة", "PARTIAL": "مدفوعة جزئياً", "PAID": "مدفوعة"}[self.value]
-
 
 class InvoiceStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
@@ -138,27 +101,14 @@ class InvoiceStatus(str, enum.Enum):
 
 
 class ChargeCategory(str, enum.Enum):
-    FIXED_FEE = "FIXED_FEE"            # أجور المقياس / قاطع الدورة…
-    ADDITIONAL_FEE = "ADDITIONAL_FEE"  # قراءة خاصة / أثمان مختلفة
+    FIXED_FEE = "FIXED_FEE"              # meter fee / circuit-breaker fee
+    ADDITIONAL_FEE = "ADDITIONAL_FEE"    # special reading / miscellaneous prices
     SERVICE_FEE = "SERVICE_FEE"
     DISCOUNT = "DISCOUNT"
-    SETTLEMENT = "SETTLEMENT"          # تسوية
-    PENALTY = "PENALTY"                # غرامة
-    DEBT = "DEBT"                      # دين سابق
+    SETTLEMENT = "SETTLEMENT"            # reconciliation
+    PENALTY = "PENALTY"                  # fine
+    DEBT = "DEBT"                        # previous debt
     OTHER = "OTHER"
-
-    @property
-    def label_ar(self) -> str:
-        return {
-            "FIXED_FEE": "رسوم ثابتة",
-            "ADDITIONAL_FEE": "رسوم إضافية",
-            "SERVICE_FEE": "رسوم خدمة",
-            "DISCOUNT": "خصم",
-            "SETTLEMENT": "تسوية",
-            "PENALTY": "غرامة",
-            "DEBT": "دين سابق",
-            "OTHER": "أخرى",
-        }[self.value]
 
 
 class DataSource(str, enum.Enum):
@@ -169,13 +119,13 @@ class DataSource(str, enum.Enum):
     UNKNOWN = "UNKNOWN"
 
     @property
-    def label_ar(self) -> str:
+    def label(self) -> str:
         return {
-            "OFFICIAL": "رسمي",
-            "HISTORICAL": "تاريخي",
-            "USER_DEFINED": "من المستخدم",
-            "ESTIMATED": "تقديري",
-            "UNKNOWN": "غير معروف",
+            "OFFICIAL": "Official",
+            "HISTORICAL": "Historical",
+            "USER_DEFINED": "User-defined",
+            "ESTIMATED": "Estimated",
+            "UNKNOWN": "Unknown",
         }[self.value]
 
 
@@ -183,7 +133,3 @@ class ComparisonStatus(str, enum.Enum):
     MATCH = "MATCH"
     MISMATCH = "MISMATCH"
     NOT_COMPARED = "NOT_COMPARED"
-
-    @property
-    def label_ar(self) -> str:
-        return {"MATCH": "مطابق", "MISMATCH": "غير مطابق", "NOT_COMPARED": "لم تتم المقارنة"}[self.value]

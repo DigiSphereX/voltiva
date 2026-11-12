@@ -26,7 +26,7 @@ def main() -> int:
         shutil.rmtree(os.path.dirname(tmp), ignore_errors=True)
 
     try:
-        ctx = AppContext(tmp, lang="ar")
+        ctx = AppContext(tmp, lang="en")
         ctx.set_theme_mode("light")
         theme.apply(app, ctx.current_theme())
         win = MainWindow(ctx)
@@ -46,14 +46,16 @@ def main() -> int:
         ctx.set_theme("light")
         assert theme.colors()["bg"].lower() == "#f4f7fc"
 
-        # nav labels show when wide, collapse to icons when narrow
-        assert win._nav_buttons["review"].text() == "المراجعة الشهرية"
+        # nav labels show when wide, collapse to icons when narrow. The expected label
+        # comes from the active dictionary, so the check stays language-agnostic.
+        review_label = ctx.tr("nav_review")
+        assert review_label and win._nav_buttons["review"].text() == review_label
         win.resize(1080, 660)
         app.processEvents()
-        assert win._nav_buttons["review"].text() != "المراجعة الشهرية"
+        assert win._nav_buttons["review"].text() != review_label
         win.resize(1300, 820)
         app.processEvents()
-        assert win._nav_buttons["review"].text() == "المراجعة الشهرية"
+        assert win._nav_buttons["review"].text() == review_label
         # i18n format smoke
         assert "910931194807" in ctx.tr("ocr_account_mismatch", account="12345", known="910931194807")
 

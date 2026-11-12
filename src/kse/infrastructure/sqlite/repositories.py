@@ -128,8 +128,7 @@ def _row_to_tier(r) -> TariffTier:
 def _row_to_fee(r) -> TariffFee:
     return TariffFee(
         id=r["id"],
-        name_ar=r["name_ar"],
-        name_en=r["name_en"],
+        name=r["name"],
         category=ChargeCategory(r["category"]),
         amount=Money.from_db(r["amount"]),
         is_fixed=bool(r["is_fixed"]),
@@ -144,8 +143,7 @@ def _row_to_fee(r) -> TariffFee:
 def _row_to_schedule(r, conn: sqlite3.Connection, load_children: bool = True) -> TariffSchedule:
     s = TariffSchedule(
         id=r["id"],
-        name_ar=r["name_ar"],
-        name_en=r["name_en"],
+        name=r["name"],
         subscriber_type=SubscriberType(r["subscriber_type"]),
         method=TariffMethod(r["method"]),
         service_zone=ServiceZone(r["service_zone"] or "TRADITIONAL"),
@@ -258,7 +256,6 @@ def _row_to_charge(r) -> InvoiceCharge:
     return InvoiceCharge(
         id=r["id"],
         name=r["name"],
-        name_en=r["name_en"],
         category=ChargeCategory(r["category"]),
         amount=Money.from_db(r["amount"]),
         reason=r["reason"],
@@ -385,10 +382,10 @@ class SqliteTariffRepository:
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         if s.id is None:
             cur = self.conn.execute(
-                """INSERT INTO TariffSchedules (name_ar, name_en, subscriber_type, method, service_zone, version,
+                """INSERT INTO TariffSchedules (name, subscriber_type, method, service_zone, version,
                    effective_from, effective_to, is_active, source, source_date, source_detail, notes, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (s.name_ar, s.name_en, s.subscriber_type.value, s.method.value, s.service_zone.value, s.version,
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (s.name, s.subscriber_type.value, s.method.value, s.service_zone.value, s.version,
                  s.effective_from.isoformat(), s.effective_to.isoformat() if s.effective_to else None,
                  1 if s.is_active else 0, s.source.value,
                  s.source_date.isoformat() if s.source_date else None, s.source_detail, s.notes, now),
@@ -397,10 +394,10 @@ class SqliteTariffRepository:
             self._save_tiers_and_fees(s)
         else:
             self.conn.execute(
-                """UPDATE TariffSchedules SET name_ar=?, name_en=?, subscriber_type=?, method=?, service_zone=?,
+                """UPDATE TariffSchedules SET name=?, subscriber_type=?, method=?, service_zone=?,
                    version=?, effective_from=?, effective_to=?, is_active=?, source=?, source_date=?,
                    source_detail=?, notes=? WHERE id=?""",
-                (s.name_ar, s.name_en, s.subscriber_type.value, s.method.value, s.service_zone.value, s.version,
+                (s.name, s.subscriber_type.value, s.method.value, s.service_zone.value, s.version,
                  s.effective_from.isoformat(), s.effective_to.isoformat() if s.effective_to else None,
                  1 if s.is_active else 0, s.source.value,
                  s.source_date.isoformat() if s.source_date else None, s.source_detail, s.notes, s.id),
@@ -410,20 +407,6 @@ class SqliteTariffRepository:
 
     def delete_schedule(self, schedule_id: int) -> None:
         self.conn.execute("DELETE FROM TariffSchedules WHERE id=?", (schedule_id,))
-
-    def save_fee(self, fee: TariffFee) -> TariffFee:
-        if fee.id is None:
-            cur = self.conn.execute(
-                """INSERT INTO TariffFees (schedule_id, name_ar, name_en, category, amount, is_fixed,
-                   depends_on_consumption, taxable, in_current_amount, in_total_due, reason)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-                (fee.id or 0, fee.name_ar, fee.name_en, fee.category.value, fee.amount.to_db(),
-                 1 if fee.is_fixed else 0, 1 if fee.depends_on_consumption else 0,
-                 1 if fee.taxable else 0, 1 if fee.in_current_amount else 0, 1 if fee.in_total_due else 0,
-                 fee.reason),
-            )
-            fee.id = cur.lastrowid
-        return fee
 
     def delete_fee(self, fee_id: int) -> None:
         self.conn.execute("DELETE FROM TariffFees WHERE id=?", (fee_id,))
@@ -452,10 +435,10 @@ class SqliteTariffRepository:
 
     def _insert_fee(self, f: TariffFee, schedule_id: int) -> None:
         cur = self.conn.execute(
-            """INSERT INTO TariffFees (schedule_id, name_ar, name_en, category, amount, is_fixed,
+            """INSERT INTO TariffFees (schedule_id, name, category, amount, is_fixed,
                depends_on_consumption, taxable, in_current_amount, in_total_due, reason)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (schedule_id, f.name_ar, f.name_en, f.category.value, f.amount.to_db(),
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (schedule_id, f.name, f.category.value, f.amount.to_db(),
              1 if f.is_fixed else 0, 1 if f.depends_on_consumption else 0,
              1 if f.taxable else 0, 1 if f.in_current_amount else 0, 1 if f.in_total_due else 0, f.reason),
         )
@@ -591,10 +574,10 @@ class SqliteInvoiceRepository:
         self.conn.execute("DELETE FROM InvoiceCharges WHERE invoice_id=?", (invoice.id,))
         for c in charges:
             self.conn.execute(
-                """INSERT INTO InvoiceCharges (invoice_id, name, name_en, category, amount, reason, is_fixed,
+                """INSERT INTO InvoiceCharges (invoice_id, name, category, amount, reason, is_fixed,
                    depends_on_consumption, taxable, in_current_amount, in_total_due, source, tariff_fee_id)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (invoice.id, c.name, c.name_en, c.category.value, c.amount.to_db(), c.reason,
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (invoice.id, c.name, c.category.value, c.amount.to_db(), c.reason,
                  1 if c.is_fixed else 0, 1 if c.depends_on_consumption else 0, 1 if c.taxable else 0,
                  1 if c.in_current_amount else 0, 1 if c.in_total_due else 0, c.source.value, c.tariff_fee_id),
             )

@@ -8,9 +8,10 @@ from PyQt6.QtWidgets import (
 
 from .. import theme
 from ..charts import BarChart, DonutChart, StatCard
+from ..currencies import get_currency_code
 from ..widgets import (
-    CardGrid, DataTable, PageHeader, chip_cell, configure_table, currency_label,
-    digits, error_text, ghost_button, money_display,
+    CardGrid, DataTable, PageHeader, chip_cell, configure_table,
+    error_text, ghost_button, money_display,
 )
 from ...domain.money import Money, fmt_quantity
 
@@ -26,7 +27,7 @@ class AnalyticsPage(QWidget):
         self.metric_combo = QComboBox()
         self.metric_combo.setToolTip(self.tr("tt_an_metric"))
         self.metric_combo.addItem(self.tr("an_metric_kwh"), "kwh")
-        self.metric_combo.addItem(f"{self.tr('an_metric_amount')} ({currency_label()})", "amount")
+        self.metric_combo.addItem(f"{self.tr('an_metric_amount')} ({get_currency_code()})", "amount")
         self.metric_combo.addItem(self.tr("an_metric_count"), "count")
 
         self.range_combo = QComboBox()
@@ -218,7 +219,7 @@ class AnalyticsPage(QWidget):
         invoices = self.app.analytics.filter_recent_months(invoices_all, last_n or 0)
         self._show_alerts(invoices)
         for card in self.cards:
-            card.set_value(digits("0"))
+            card.set_value("0")
             card.set_sub("")
         if not invoices:
             self.chart.set_data([], [], self.tr("an_no_data"))
@@ -231,7 +232,7 @@ class AnalyticsPage(QWidget):
 
         series = self.app.analytics.series_for_months(invoices, last_n=last_n or 1000)
         metric = self.metric_combo.currentData()
-        labels = [digits(m[5:] + "/" + m[:4]) for m in series["labels"]]
+        labels = [str(m[5:] + "/" + m[:4]) for m in series["labels"]]
         legend = None
         integer = False
         if metric == "kwh":
@@ -256,29 +257,29 @@ class AnalyticsPage(QWidget):
                 self.app.analytics.kwh_trend(invoices), "an_trend_insufficient")))
 
         stats = self.app.analytics.compute_stats(invoices)
-        self.cards[0].set_value(digits(str(stats["total_invoices"])))
-        self.cards[1].set_value(f"{digits(fmt_quantity(stats['total_kwh']))} {self.tr('unit_kwh')}")
+        self.cards[0].set_value(str(stats["total_invoices"]))
+        self.cards[1].set_value(f"{fmt_quantity(stats['total_kwh'])} {self.tr('unit_kwh')}")
         self.cards[2].set_value(money_display(stats["total_amount"]))
         self.cards[3].set_value(money_display(stats["total_paid"]))
         self.cards[4].set_value(money_display(stats["total_unpaid"]))
-        rate = digits(f"{float(stats['collection_rate']):.1f}")
+        rate = f"{float(stats['collection_rate']):.1f}"
         self.cards[5].set_value(f"{rate}%")
         self.cards[6].set_value(money_display(stats["avg_invoice"]))
-        self.cards[7].set_value(f"{digits(stats['cost_per_kwh'])} / {self.tr('unit_kwh')}")
+        self.cards[7].set_value(f"{str(stats['cost_per_kwh'])} / {self.tr('unit_kwh')}")
         forecast = self.app.analytics.forecast_next_month(invoices)
         self.cards[8].set_value(money_display(forecast["amount"]))
         self.cards[8].set_sub(self.tr("an_confidence_" + forecast["confidence"]))
-        self.cards[9].set_value(f"{digits(fmt_quantity(forecast['kwh']))} {self.tr('unit_kwh')}")
+        self.cards[9].set_value(f"{fmt_quantity(forecast['kwh'])} {self.tr('unit_kwh')}")
         self.cards[9].set_sub(self.tr("an_next_month"))
         self.cards[10].set_value(money_display(stats["max_invoice"]))
         self.cards[11].set_value(self._health_score(stats))
         self.cards[11].set_sub(self.tr("an_health_hint"))
         self.legend_lbl.setText(self.tr("an_legend").format(
-            avg=f"{digits(fmt_quantity(stats['avg_kwh']))} {self.tr('unit_kwh')}",
-            max=digits(fmt_quantity(stats['max_kwh'])),
-            min=digits(fmt_quantity(stats['min_kwh'])),
-            paid=digits(stats["paid_count"]),
-            unpaid=digits(stats["unpaid_count"])))
+            avg=f"{fmt_quantity(stats['avg_kwh'])} {self.tr('unit_kwh')}",
+            max=fmt_quantity(stats['max_kwh']),
+            min=fmt_quantity(stats['min_kwh']),
+            paid=str(stats["paid_count"]),
+            unpaid=str(stats["unpaid_count"])))
         self._fill_payment_mix(self.app.analytics.payment_breakdown(invoices))
         self._fill_leaders(self.app.analytics.subscriber_leaders(invoices))
         self._fill_month_table(self.app.analytics.monthly_table(invoices, last_n or 0))
@@ -290,12 +291,12 @@ class AnalyticsPage(QWidget):
             for a in alerts:
                 if a["type"] == "rate":
                     lines.append("— " + self.tr("an_anomaly_rate",
-                                                 m=digits(a["month"]), rate=digits(a["rate"]),
-                                                 avg=digits(a["avg"])))
+                                                 m=str(a["month"]), rate=str(a["rate"]),
+                                                 avg=str(a["avg"])))
                 else:
                     lines.append("— " + self.tr("an_anomaly_consumption",
-                                                 m=digits(a["month"]), kwh=digits(a["kwh"]),
-                                                 avg=digits(a["avg"])))
+                                                 m=str(a["month"]), kwh=str(a["kwh"]),
+                                                 avg=str(a["avg"])))
             self.alerts_lbl.setText(self.tr("an_alerts") + "\n" + "\n".join(lines))
             self.alerts_lbl.setVisible(True)
         else:
@@ -307,7 +308,7 @@ class AnalyticsPage(QWidget):
         unpaid_ratio = float(stats["unpaid_count"]) / total
         collection = float(stats["collection_rate"])
         score = max(0, min(100, int(collection - unpaid_ratio * 20)))
-        return f"{digits(score)}/{digits(100)}"
+        return f"{score}/100"
 
     def _open_month(self, month_key: str) -> None:
         """A click on a bar opens the invoices of that month (the invoices page reads this)."""
@@ -368,14 +369,14 @@ class AnalyticsPage(QWidget):
             total += count
             amount = money_display(data["amount"]) if data.get("amount") is not None \
                 else money_display(Money.zero())
-            items.append((self.tr(label_key), float(count), color, f"{digits(count)} — {amount}"))
-        self.payment_donut.set_data(items, digits(total), self.tr("dash_total_invoices"))
+            items.append((self.tr(label_key), float(count), color, f"{str(count)} — {amount}"))
+        self.payment_donut.set_data(items, str(total), self.tr("dash_total_invoices"))
 
     def _fill_leaders(self, rows: list[dict]) -> None:
         self.leaders_table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             values = [
-                row["name"], row["account"], digits(row["count"]),
+                row["name"], row["account"], str(row["count"]),
                 money_display(row["amount"]), money_display(row["unpaid"]),
             ]
             for c, value in enumerate(values):
@@ -391,13 +392,13 @@ class AnalyticsPage(QWidget):
         for r, row in enumerate(rows):
             remaining = row["remaining"].raw
             values = [
-                digits(row["month"]),
-                digits(row["count"]),
-                f"{digits(fmt_quantity(row['kwh']))} {self.tr('unit_kwh')}",
+                str(row["month"]),
+                str(row["count"]),
+                f"{fmt_quantity(row['kwh'])} {self.tr('unit_kwh')}",
                 money_display(row["amount"]),
                 money_display(row["paid"]),
                 money_display(row["remaining"]),
-                f"{digits(row['avg_rate'])} / {self.tr('unit_kwh')}",
+                f"{str(row['avg_rate'])} / {self.tr('unit_kwh')}",
             ]
             for col, value in enumerate(values):
                 # The chip widget paints the remaining amount; keeping the item text too

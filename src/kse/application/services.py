@@ -50,27 +50,27 @@ from ..domain.models import (
     Subscriber,
     TariffSchedule,
 )
-from ..domain.money import Money, round_money
+from ..domain.money import Money, money_label, round_money
 from ..domain.services.audit import AuditEngine
 from ..domain.services.fees import FeeResult
-from ..domain.services.invoice_calc import InvoiceCalculation, InvoiceCalculator, _money_ar
+from ..domain.services.invoice_calc import InvoiceCalculation, InvoiceCalculator
 from ..domain.services.tariff import TariffEngine
 from ..domain.services.validation import Issue, ValidationEngine, ValidationReport
 
-_SVC_AR = {
-    "svc_recalc_note": "إعادة حساب من فاتورة {no}",
-    "svc_audit_calc": "حساب فاتورة {no} — المجموع {amount}",
-    "svc_audit_tariff_save": "حفظ تعريفة {name} (نسخة {v})",
-    "svc_audit_tariff_del": "حذف تعريفة {name}",
-    "svc_sub_default_name": "مشترك {no}",
-    "err_debt_unavailable": "لا يمكن التحقق من المبلغ لأن بيانات الدين السابق غير متوفرة.",
-    "err_no_tariff": "لا يمكن حساب الفاتورة بدقة لأن جدول التعرفة للفترة المحددة غير موجود. (المشترك: {type} — التاريخ: {date})",
-    "err_tariff_conflict": "تم العثور على أكثر من تعرفة واحدة صالحة للفترة المحددة: {names}. يرجى تصحيح الجداول قبل الحساب.",
+_SVC_EN = {
+    "svc_recalc_note": "Recalculated from invoice {no}",
+    "svc_audit_calc": "Invoice {no} calculated — total {amount}",
+    "svc_audit_tariff_save": "Tariff {name} saved (version {v})",
+    "svc_audit_tariff_del": "Tariff {name} deleted",
+    "svc_sub_default_name": "Subscriber {no}",
+    "err_debt_unavailable": "The amount cannot be verified because the previous-debt data is unavailable.",
+    "err_no_tariff": "The invoice cannot be calculated exactly because the tariff schedule for the period is missing. (Subscriber type: {type} — date: {date})",
+    "err_tariff_conflict": "More than one valid tariff was found for the period: {names}. Fix the schedules before calculating.",
 }
 
 
-def _svc_ar_tr(key: str, **kwargs) -> str:
-    text = _SVC_AR.get(key, key)
+def _svc_en_tr(key: str, **kwargs) -> str:
+    text = _SVC_EN.get(key, key)
     return text.format(**kwargs) if kwargs else text
 from .interfaces import (
     AuditRepository,
@@ -119,7 +119,7 @@ class InvoiceService:
         self.subscribers = subscriber_repo
         self.audit = audit_repo
         self.uow = uow
-        self.tr = tr or _svc_ar_tr
+        self.tr = tr or _svc_en_tr
 
     # ----- calculation (pure, deterministic) ---------------------------
     def calculate(self, req: CalculateInvoiceRequest) -> tuple[InvoiceCalculation, TariffSchedule]:
@@ -229,7 +229,7 @@ class InvoiceService:
             adjusted_kwh=calc.reading.adjusted_kwh if calc.reading else Decimal("0"),
             tariff_schedule_id=schedule.id,
             tariff_version=schedule.version,
-            tariff_name=schedule.name_ar or schedule.name_en,
+            tariff_name=schedule.name,
             tariff_source=schedule.source.value,
             energy_cost=calc.energy_cost,
             fixed_fees=calc.fixed_fees,
@@ -388,7 +388,7 @@ class InvoiceService:
             replacement_base=None,
             tariff_schedule_id=schedule.id,
             tariff_version=schedule.version,
-            tariff_name=schedule.name_ar,
+            tariff_name=schedule.name,
             tariff_source=schedule.source,
             debt=calc.previous_debt,
             fees=calc.fee_result.charges if calc.fee_result else [],
@@ -398,7 +398,7 @@ class InvoiceService:
             snapshot=snapshot,
             calc=calc,
             description=self.tr("svc_audit_calc", no=invoice.invoice_no,
-                                amount=_money_ar(invoice.total_due)),
+                                amount=money_label(invoice.total_due)),
             invoice_id=invoice.id,
             user=user,
             run_id=run_id,
@@ -438,7 +438,7 @@ class TariffService:
         self.tariffs = tariff_repo
         self.audit = audit_repo
         self.uow = uow
-        self.tr = tr or _svc_ar_tr
+        self.tr = tr or _svc_en_tr
 
     def list(self, include_inactive: bool = False) -> list[TariffSchedule]:
         return self.tariffs.list_schedules(include_inactive=include_inactive)
@@ -458,9 +458,9 @@ class TariffService:
         saved = self.tariffs.save_schedule(schedule)
         self.audit.append(AuditLogEntry(
             action="TARIFF_SAVE", entity_type="TARIFF", entity_id=saved.id,
-            description=self.tr("svc_audit_tariff_save", name=saved.name_ar or saved.name_en,
+            description=self.tr("svc_audit_tariff_save", name=saved.name,
                                 v=saved.version),
-            details_json=json.dumps({"name_ar": saved.name_ar, "version": saved.version},
+            details_json=json.dumps({"name": saved.name, "version": saved.version},
                                     ensure_ascii=False),
             tariff_schedule_id=saved.id, user=user,
         ))
@@ -474,7 +474,7 @@ class TariffService:
         if schedule is not None:
             self.audit.append(AuditLogEntry(
                 action="TARIFF_DELETE", entity_type="TARIFF", entity_id=schedule_id,
-                description=self.tr("svc_audit_tariff_del", name=schedule.name_ar or schedule.name_en),
+                description=self.tr("svc_audit_tariff_del", name=schedule.name),
                 tariff_schedule_id=schedule_id,
             ))
         if self.uow is not None:
@@ -492,7 +492,7 @@ class SubscriberService:
         self.tariffs = tariff_repo
         self.debts = debt_repo
         self.uow = uow
-        self.tr = tr or _svc_ar_tr
+        self.tr = tr or _svc_en_tr
 
     def find_or_create(self, account_no: str, subscription_no: str = "", name: str = "",
                        subscriber_type: SubscriberType = SubscriberType.RESIDENTIAL,

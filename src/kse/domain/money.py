@@ -18,22 +18,7 @@ from decimal import Decimal, ROUND_HALF_UP, getcontext
 MONEY_SCALE = 2          # internal monetary precision
 CONSUMPTION_SCALE = 6    # consumption precision (supports multipliers)
 CURRENCY = "IQD"
-CURRENCY_AR = "د.ع"
-
-# Display-style flag ("Arabic-Indic digits + د.ع" vs "Western digits + ISO code").
-# It lives in the domain so the billing engine can label amounts WITHOUT importing
-# the Qt presentation layer (which made the engine, the seed data and most of the
-# test-suite impossible to run without PyQt6 installed).
-_ARABIC_DISPLAY = False
-
-
-def set_arabic_display(enabled: bool) -> None:
-    global _ARABIC_DISPLAY
-    _ARABIC_DISPLAY = bool(enabled)
-
-
-def is_arabic_display() -> bool:
-    return _ARABIC_DISPLAY
+DEFAULT_CURRENCY_CODE = "USD"
 
 getcontext().prec = 34
 
@@ -74,19 +59,12 @@ def fmt_quantity(d: Decimal | int, max_scale: int = CONSUMPTION_SCALE) -> str:
     return text
 
 
-def fmt_ar_number(d: Decimal | int, scale: int = 0) -> str:
-    """Format a plain number with grouping, converting ASCII digits to Arabic-Indic digits."""
+def fmt_number(d: Decimal | int, scale: int = 0) -> str:
+    """Format a plain number with grouping, half-up rounded to ``scale`` decimals."""
     if scale == 0:
-        raw = f"{_to_decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP):,}"
-    else:
-        raw = f"{_to_decimal(d).quantize(Decimal('1e-{:d}'.format(scale)), rounding=ROUND_HALF_UP):,}"
-    return arabic_digits(raw)
-
-
-def arabic_digits(text: str) -> str:
-    """Convert ASCII digits 0-9 to Arabic-Indic digits, and separators to Arabic ones."""
-    mapping = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
-    return text.translate(mapping).replace(",", "٬").replace(".", "٫")
+        return f"{_to_decimal(d).quantize(Decimal('1'), rounding=ROUND_HALF_UP):,}"
+    q = Decimal("1e-{:d}".format(scale))
+    return f"{_to_decimal(d).quantize(q, rounding=ROUND_HALF_UP):,}"
 
 
 def latin_digits(text: str) -> str:
@@ -94,6 +72,20 @@ def latin_digits(text: str) -> str:
     mapping = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
     result = text.translate(mapping).replace("٬", ",").replace("٫", ".")
     return result
+
+
+def money_label(m: "Money", code: str | None = None) -> str:
+    """Amount label with an ISO currency code, e.g. ``12,345 IQD``.
+
+    The active currency is owned by the presentation settings layer; it is read
+    lazily (``currencies`` is a plain data module) so the domain, the seed data
+    and the test suite stay importable without a Qt installation.
+    """
+    if code is None:
+        from ..presentation.currencies import get_currency_code
+
+        code = get_currency_code()
+    return f"{m.display()} {code}"
 
 
 class Money:
@@ -176,10 +168,6 @@ class Money:
         q = self._raw.quantize(Decimal("1e-{:d}".format(decimals)), rounding=ROUND_HALF_UP)
         return f"{q:,}"
 
-    def display_ar(self) -> str:
-        """Arabic-Indic digits + IQD suffix: '٣٥٬٨٤٠ د.ع'."""
-        return f"{arabic_digits(self.display())} {CURRENCY_AR}"
-
     def display_exact(self) -> str:
         return f"{self._raw:,}"
 
@@ -205,7 +193,7 @@ class Money:
         cleaned = latin_digits(str(text)).strip()
         if integer_only:
             if re.search(r"[.,]", cleaned):
-                raise ValueError("القراءات يجب أن تكون أعداداً صحيحة بدون كسر.")
+                raise ValueError("Readings must be whole numbers (no fractions).")
             cleaned = re.sub(r"[^0-9]", "", cleaned)
         else:
             cleaned = re.sub(r"[^0-9.,]", "", cleaned).replace(",", "")
@@ -220,14 +208,14 @@ class Money:
         # Negative money is never a valid amount entry (discounts are a category).
         raw_text = latin_digits(str(text)).strip()
         if raw_text.startswith(("-", "−")):
-            raise ValueError("المبلغ لا يمكن أن يكون سالباً.")
+            raise ValueError("A money amount cannot be negative.")
         cleaned = Money._clean_input(text, integer_only=False)
         if cleaned == "":
             raise ValueError("no value")
         try:
             return Money(Decimal(cleaned))
         except (decimal.InvalidOperation, ValueError, TypeError) as exc:
-            raise ValueError(f"مبلغ غير صالح: {text}") from exc
+            raise ValueError(f"Invalid amount: {text}") from exc
 
     @staticmethod
     def parse_reading(text: str) -> Decimal:
@@ -240,7 +228,7 @@ class Money:
         try:
             value = Decimal(cleaned)
         except decimal.InvalidOperation as exc:
-            raise ValueError(f"قراءة غير صالحة: {text}") from exc
+            raise ValueError(f"Invalid reading: {text}") from exc
         if value != value.to_integral_value():
             raise ValueError("readings must be whole numbers (kWh)")
         return value

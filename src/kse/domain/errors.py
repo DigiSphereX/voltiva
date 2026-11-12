@@ -28,8 +28,8 @@ class NoTariffFoundError(CalculationError):
         self.subscriber_type = subscriber_type
         self.effective_date = effective_date
         super().__init__(
-            "لا يمكن حساب الفاتورة بدقة لأن جدول التعرفة للفترة المحددة غير موجود. "
-            f"(المشترك: {subscriber_type} — التاريخ: {effective_date})"
+            "The invoice cannot be calculated accurately because no tariff schedule covers "
+            f"the selected period. (Subscriber: {subscriber_type} — Date: {effective_date})"
         )
 
 
@@ -38,7 +38,7 @@ class DebtUnavailableError(CalculationError):
 
     code = "DEBT_UNAVAILABLE"
 
-    def __init__(self, message: str = "لا يمكن التحقق من المبلغ لأن بيانات الدين السابق غير متوفرة.") -> None:
+    def __init__(self, message: str = "The amount cannot be verified because previous-debt data is unavailable.") -> None:
         super().__init__(message)
 
 
@@ -110,9 +110,9 @@ class TariffConflictError(CalculationError):
 
     def __init__(self, schedule_names: list[str]) -> None:
         super().__init__(
-            "تم العثور على أكثر من تعرفة واحدة صالحة للفترة المحددة: "
-            + "، ".join(schedule_names)
-            + ". يرجى تصحيح الجداول قبل الحساب."
+            "More than one tariff is valid for the selected period: "
+            + ", ".join(schedule_names)
+            + ". Please correct the schedules before calculating."
         )
 
 

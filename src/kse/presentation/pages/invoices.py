@@ -13,7 +13,7 @@ from ...infrastructure.export.exporters import csv_export, excel_export, json_ex
 from .. import theme
 from ..filters import month_bounds
 from ..widgets import (
-    DataTable, PageHeader, chip_cell, configure_table, digits, error_text,
+    DataTable, PageHeader, chip_cell, configure_table, error_text,
     ghost_button, money_display, muted, primary_button, small_button,
 )
 
@@ -167,7 +167,7 @@ class InvoicesPage(QWidget):
             self._month = None
         self.month_btn.setVisible(bool(self._month))
         if self._month:
-            self.month_btn.setText("✕  " + self.tr("il_month_filter", month=digits(self._month)))
+            self.month_btn.setText("✕  " + self.tr("il_month_filter", month=str(self._month)))
             self.month_btn.setToolTip(self.tr("il_clear_filter"))
         invoices = repo.search(query=query, payment_status=payment_status, date_from=date_from, date_to=date_to,
                                order_by=self._sort_key, descending=self._sort_desc, limit=_RESULT_LIMIT)
@@ -194,9 +194,9 @@ class InvoicesPage(QWidget):
                 cells = [
                     (inv.invoice_no, left),
                     (inv.subscriber_name or "—", left),
-                    (digits(inv.account_no), left),
-                    (digits(inv.issue_date.strftime("%d/%m/%Y")), left),
-                    (digits(fmt_quantity(inv.adjusted_kwh)), right),
+                    (inv.account_no, left),
+                    (inv.issue_date.strftime("%d/%m/%Y"), left),
+                    (fmt_quantity(inv.adjusted_kwh), right),
                     (money_display(inv.total_due), right),
                     (money_display(inv.official_amount) if inv.official_amount else "—", right),
                 ]
@@ -224,9 +224,9 @@ class InvoicesPage(QWidget):
         if not invoices:
             self.count_lbl.setText(self.tr("il_none"))
         elif len(invoices) < total:
-            self.count_lbl.setText(self.tr("il_showing", shown=digits(len(invoices)), total=digits(total)))
+            self.count_lbl.setText(self.tr("il_showing", shown=str(len(invoices)), total=str(total)))
         else:
-            self.count_lbl.setText(self.tr("il_showing_all", total=digits(len(invoices))))
+            self.count_lbl.setText(self.tr("il_showing_all", total=str(len(invoices))))
 
     def _current_invoice_ids(self) -> list[int]:
         ids: list[int] = []

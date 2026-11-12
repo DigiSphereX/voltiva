@@ -4,6 +4,64 @@ All notable changes to this project are documented here.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.2.0 - 2026-11-12
+
+Voltiva 1.2.0 makes the interface strictly English-only in its scripts: the
+Arabic interface language is retired, every shipped language is written in its
+own script, and the whole application lays out left-to-right. Billing data and
+the invoices already stored are fully preserved.
+
+**Breaking changes**
+
+- **Arabic interface removed.** The language selector now offers nine
+  languages — English, French, Spanish, German, Portuguese, Russian, Turkish,
+  Hindi and Chinese — each in its own script. Arabic-Indic digits are no longer
+  displayed anywhere.
+- **One name per tariff.** `TariffSchedule.name_ar` / `name_en` are replaced by a
+  single `name` column. The database migrates itself on first start (migration
+  5 rebuilds the tariff, fee and tier tables, keeps the English name when one
+  exists and re-creates every index), so no manual step is required.
+- **Data folder renamed.** The program directory is now `~/.voltiva/` with
+  `voltiva.db`; a database left in the previous `~/.kahraba_smart/` folder is
+  adopted automatically instead of being silently ignored.
+
+**Changed**
+
+- **Layout is always left-to-right.** The right-to-left style pass, the mirrored
+  field alignment and the Arabic-Indic money/quantity formatters are gone; forms,
+  tables, charts and exports share one geometry.
+- **Exports are English-only.** Invoices, receipts and PDFs use one English
+  disclaimer and no language parameter, so a document looks the same whatever
+  the interface language is.
+- **Domain messages are English.** Reading, multiplier, billing-period and OCR
+  messages raised by the engine are written in English; the interface still
+  translates its own chrome, so a non-English user sees a translated dialog with
+  an English technical detail line.
+- **Launcher renamed** from `run_kahraba.bat` to `run_voltiva.bat`.
+- **Error messages are translated in every language.** The seven dynamic
+  payment/invoice-state errors now exist in all nine dictionaries instead of
+  falling back to English at runtime.
+
+**Kept on purpose**
+
+- **Arabic input is still accepted.** Pasted or typed Arabic-Indic digits are
+  normalised to Western digits, so a reading copied from a printed bill is never
+  rejected.
+- **The OCR reader still understands Arabic invoices.** Its keyword tables,
+  spatial anchors and Tesseract `ara` language pack are unchanged — they parse
+  the bill, they never print to the screen.
+
+**Quality**
+
+- New static guards fail the build if an Arabic-script character appears in any
+  interface string, enum label or calculation-step label, or if a language is
+  registered as right-to-left.
+- Full suite green: 289 passed, 1 skipped (engine, OCR/AI, GUI tour,
+  infrastructure); QSS lint, the WCAG AA contrast audit of all six palettes and
+  the widget-geometry audit all pass.
+- All screenshots regenerated with the native Windows font engine (English UI,
+  light and dark).
+
 ## 1.1.0 - 2026-10-30
 
 - **AI bill scanning**: a new vision reader fills the import form from a bill photo, with
@@ -128,7 +186,7 @@ Details by theme:
   single destination; Settings is a standalone button pinned above the version label.
 - Section captions are now visibly non-interactive (smaller, no border, no hover) and kept
   apart from the clickable rows, ending the "Insights header looks like a button" confusion.
-- Group labels translated in all ten languages ("Reports", "التقارير", "Rapports", …).
+- Group labels translated in all ten languages (for example "Reports" / "Rapports").
 
 ### Theme system expansion
 
@@ -159,7 +217,7 @@ Details by theme:
   invoices table localized them; both pages now agree.
 - Read-only path fields (database, app icon) render LTR, so an Arabic folder name no longer
   scrambles the drive/backslash segments of the path.
-- The analytics health score is fully localized (`٠/١٠٠`, not `٠/100`).
+- The analytics health score is fully localized (score and denominator used the same digit script).
 
 **Changed (UX)**
 - The billing card (previous debt / official amount) moved next to the calculation result, so

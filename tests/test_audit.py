@@ -12,7 +12,7 @@ from conftest import make_schedule
 
 
 def run_and_record():
-    s = make_schedule(name="مرجع", rate=Decimal("10"))
+    s = make_schedule(name="Reference", rate=Decimal("10"))
     calc = InvoiceCalculator.calculate(
         subscriber_type=SubscriberType.RESIDENTIAL,
         previous_reading=13578,
@@ -35,14 +35,14 @@ def run_and_record():
         replacement_base=None,
         tariff_schedule_id=s.id,
         tariff_version=s.version,
-        tariff_name=s.name_ar,
+        tariff_name=s.name,
         tariff_source=s.source,
         debt=calc.previous_debt,
         fees=calc.fee_result.charges,
     )
     record = AuditEngine.build_record(
         action="CALCULATE", snapshot=snapshot, calc=calc,
-        description="مثال", invoice_id=1,
+        description="Example", invoice_id=1,
     )
     return snapshot, record, s
 

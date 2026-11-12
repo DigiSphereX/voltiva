@@ -116,14 +116,6 @@ def main() -> int:
         _settle(app)
 
     ctx.set_theme_mode("light")
-    ctx.set_language_pref("ar")
-    _settle(app)
-    for key in ("dashboard", "new_invoice", "invoices", "verify", "review", "analytics",
-                "tariffs", "subscribers", "settings"):
-        win.show_page(key)
-        _settle(app)
-        win.grab().save(os.path.join(OUT, f"{key}-ar.png"))
-        print("saved", f"{key}-ar.png", flush=True)
 
     ctx.close()
     return 0

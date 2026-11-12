@@ -12,7 +12,7 @@ from ...domain.models import Subscriber
 from ...domain.money import latin_digits
 from .. import theme
 from ..widgets import (
-    DataTable, PageHeader, action_cell, configure_table, danger_small_button, digits,
+    DataTable, PageHeader, action_cell, configure_table, danger_small_button,
     error_text, fit_action_column, form_label, ghost_button, money_display, muted,
     primary_button, small_button,
 )
@@ -186,7 +186,7 @@ class SubscribersPage(QWidget):
             self.table.setRowCount(len(subscribers))
             for r, s in enumerate(subscribers):
                 values = (
-                    digits(s.account_no), digits(s.subscription_no), s.name,
+                    s.account_no, s.subscription_no, s.name,
                     self.app.i18n.enum_label(s.subscriber_type), s.governorate,
                     money_display(s.previous_debt),
                 )
@@ -202,7 +202,7 @@ class SubscribersPage(QWidget):
                 fit_action_column(self.table, 6, actions)
         finally:
             self.table.setUpdatesEnabled(True)
-        self.count_lbl.setText(self.tr("sb_showing", n=digits(str(len(subscribers)))))
+        self.count_lbl.setText(self.tr("sb_showing", n=str(len(subscribers))))
 
     def _actions_cell(self, subscriber_id: int) -> QWidget:
         edit_btn = small_button(self.tr("edit"))

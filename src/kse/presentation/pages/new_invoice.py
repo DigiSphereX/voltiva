@@ -8,12 +8,12 @@ from PyQt6.QtWidgets import (
 
 from ...application.services import CalculateInvoiceRequest
 from ...domain.enums import MeterScenario, ServiceZone, SubscriberType
-from ...domain.money import latin_digits
+from ...domain.money import fmt_quantity, latin_digits
 from .. import theme
 from ..app_context import default_issue_dates
 from ..widgets import (
     DataTable, FormRow, MoneyEdit, PageHeader, ReadingEdit, Section, configure_table,
-    currency_label, date_edit, digits, error_label, error_text, ghost_button,
+    date_edit, error_label, error_text, ghost_button,
     money_display, muted, primary_button, success_label,
 )
 
@@ -327,22 +327,18 @@ class NewInvoicePage(QWidget):
         rows = []
         if calc.reading:
             rows.append((self.tr("reading_step"),
-                         f"{digits(calc.reading.previous_reading)} → {digits(calc.reading.current_reading)} = "
-                         f"{digits(calc.reading.consumption_kwh)} {self.tr('unit_kwh')}"))
+                         f"{fmt_quantity(calc.reading.previous_reading)} → {fmt_quantity(calc.reading.current_reading)} = "
+                         f"{fmt_quantity(calc.reading.consumption_kwh)} {self.tr('unit_kwh')}"))
         rows.append((self.tr("tariff_step"), money_display(calc.energy_cost)))
-        use_ar = self.app.current_digits() == "arabic"
         for step in calc.steps:
-            label = self.app.i18n.step_label(step.label_ar)
+            label = self.app.i18n.step_label(step.label)
             value = step.value_display
-            if use_ar:
-                value = digits(value)
-            elif step.label_ar == "الحالة" and calc.reading is not None:
+            if step.label == "Status" and calc.reading is not None:
+                # the scenario is an enum: show it through the active language
                 value = self.app.i18n.enum_label(calc.reading.scenario)
             else:
-                # The domain emits Arabic currency/duration suffixes; swap them for the
-                # active language instead of hardcoding English.
-                value = (value.replace(" د.ع", f" {currency_label()}")
-                              .replace(" يوماً", f" {self.tr('unit_days')}"))
+                # The domain emits English unit words; swap them for the active language.
+                value = value.replace(" days", f" {self.tr('unit_days')}")
             rows.append((label, value))
         if calc.comparison and calc.comparison.status.value != "NOT_COMPARED":
             rows.append((self.tr("vk_official"), money_display(calc.comparison.official_amount)))

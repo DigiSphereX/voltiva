@@ -24,7 +24,6 @@ from kse.domain.money import Money  # noqa: E402
 from kse.presentation.app_context import AppContext  # noqa: E402
 from kse.presentation import theme  # noqa: E402
 from kse.presentation.main_window import MainWindow  # noqa: E402
-from kse.presentation.widgets import set_money_lang  # noqa: E402
 
 EXCEPTIONS: list[str] = []
 
@@ -126,7 +125,6 @@ class TestButtonTour:
     def test_all_buttons_do_not_crash(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "tour.db")
         ctx = AppContext(tmp, lang="en")
-        set_money_lang(ctx.i18n.lang)
         try:
             sub = ctx.subscribers.find_or_create("1201234567", name="Sample Subscriber")
             req = CalculateInvoiceRequest(
@@ -247,11 +245,10 @@ class TestSelectedRowLegibility:
 
 
 @pytest.mark.gui
-class TestArabicInputAndDigits:
-    def test_localized_numbers_and_arabic_search(self, gui_app):
+class TestInputNormalization:
+    def test_arabic_keyboard_query_matches_stored_account(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "digits.db")
-        ctx = AppContext(tmp, lang="ar")
-        set_money_lang("ar")
+        ctx = AppContext(tmp, lang="en")
         try:
             sub = ctx.subscribers.find_or_create("1201234567", name="Sample")
             req = CalculateInvoiceRequest(
@@ -273,22 +270,21 @@ class TestArabicInputAndDigits:
             win.show_page("subscribers")
             app.processEvents()
             page = win._pages["subscribers"]
+            # Numbers are always rendered with Western digits.
             for row in range(page.table.rowCount()):
                 for col in (0, 1):
                     text = page.table.item(row, col).text()
-                    assert text and not any(ch.isascii() and ch.isdigit() for ch in text), text
-            # status bar count follows the digit style too
-            status = win.status_lbl.text()
-            assert status and not any(ch.isascii() and ch.isdigit() for ch in status), status
+                    assert text, text
 
-            # An Arabic-keyboard query still matches the stored ASCII account number
+            # An Arabic-keyboard query still matches the stored ASCII account number.
             first_account = page.table.item(0, 0).text()
-            page.search_edit.setText(first_account)
+            arabic_query = first_account.translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))
+            page.search_edit.setText(arabic_query)
             page.refresh()
             app.processEvents()
             assert page.table.rowCount() == 1
 
-            # Path fields are rendered LTR so an Arabic folder name cannot scramble them
+            # Path fields are rendered LTR so a non-Latin folder name cannot scramble them
             win.show_page("settings")
             app.processEvents()
             db_field = win._pages["settings"].db_path_edit
@@ -310,7 +306,6 @@ class TestEditSaveFlow:
     def test_edit_dialog_saves_invoice(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "edit.db")
         ctx = AppContext(tmp, lang="en")
-        set_money_lang(ctx.i18n.lang)
         try:
             from kse.presentation.pages.edit_invoice import InvoiceEditDialog
 
@@ -365,7 +360,6 @@ class TestThemeModes:
     def test_selector_and_topbar_follow_each_palette(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "themes.db")
         ctx = AppContext(tmp, lang="en")
-        set_money_lang(ctx.i18n.lang)
         try:
             win = MainWindow(ctx)
             win.show()
@@ -417,7 +411,7 @@ class TestNavigationAndCalendar:
 
     def test_date_picker_calendar_fits_every_day(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "calendar.db")
-        ctx = AppContext(tmp, lang="ar")
+        ctx = AppContext(tmp, lang="en")
         try:
             win = MainWindow(ctx)
             win.show()
@@ -426,8 +420,8 @@ class TestNavigationAndCalendar:
             gui_app.processEvents()
             picker = win._pages["verify"].findChildren(QDateEdit)[0]
             cal = picker.calendarWidget()
-            assert cal.locale().language() == QLocale.Language.Arabic
-            assert cal.firstDayOfWeek() == QLocale("ar").firstDayOfWeek()
+            assert cal.locale().language() == QLocale.Language.English
+            assert cal.firstDayOfWeek() == QLocale("en").firstDayOfWeek()
             assert cal.minimumWidth() >= 320 and cal.minimumHeight() >= 240
             assert cal.verticalHeaderFormat() == QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader
             for name in ("qt_calendar_prevmonth", "qt_calendar_nextmonth"):
@@ -556,8 +550,7 @@ class TestEntryTables:
 class TestAiScanSettings:
     def test_settings_page_saves_ai_configuration_and_dialog_reports_engine(self, gui_app):
         tmp = os.path.join(tempfile.mkdtemp(), "ai_scan.db")
-        ctx = AppContext(tmp, lang="ar")
-        set_money_lang(ctx.i18n.lang)
+        ctx = AppContext(tmp, lang="en")
         try:
             from kse.infrastructure.ocr.ai_scanner import AiScanConfig
             from kse.presentation.pages.import_invoice import ImportInvoiceDialog

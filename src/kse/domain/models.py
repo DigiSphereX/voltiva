@@ -82,8 +82,7 @@ class TariffTier:
 
 @dataclass
 class TariffSchedule:
-    name_ar: str = ""
-    name_en: str = ""
+    name: str = ""
     subscriber_type: SubscriberType = SubscriberType.RESIDENTIAL
     method: TariffMethod = TariffMethod.FLAT
     service_zone: ServiceZone = ServiceZone.TRADITIONAL
@@ -109,8 +108,7 @@ class TariffSchedule:
 class TariffFee:
     """A default charge attached to a tariff schedule (e.g. meter fees)."""
 
-    name_ar: str = ""
-    name_en: str = ""
+    name: str = ""
     category: ChargeCategory = ChargeCategory.FIXED_FEE
     amount: Money = field(default_factory=Money.zero)
     is_fixed: bool = True
@@ -127,7 +125,6 @@ class InvoiceCharge:
     """A single line item on an invoice."""
 
     name: str = ""
-    name_en: str = ""
     category: ChargeCategory = ChargeCategory.FIXED_FEE
     amount: Money = field(default_factory=Money.zero)
     reason: str = ""

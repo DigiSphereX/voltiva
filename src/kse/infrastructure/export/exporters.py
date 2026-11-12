@@ -14,17 +14,7 @@ from pathlib import Path
 
 from ...domain.enums import ChargeCategory, DataSource, MeterScenario, PaymentStatus, SubscriberType
 from ...domain.models import Invoice, InvoiceCharge, InvoiceReading
-from ...domain.money import CURRENCY_AR, Money, arabic_digits, fmt_quantity
-
-DISCLAIMER_AR = "حساب تقديري/تحليلي --- ليس مستنداً رسمياً صادراً عن جهة رسمية."
-DISCLAIMER_EN = "Analytical / estimated calculation --- not an official document issued by a power utility provider."
-
-
-def _fmt_money(m: Money | None) -> str:
-    if m is None:
-        return ""
-    return f"{m.display()} {CURRENCY_AR}"
-
+from ...domain.money import Money
 
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 _NUMERIC_LIKE = re.compile(r"[+-]?[\d\s.,]+")
@@ -405,7 +395,5 @@ def csv_export_monthly(monthly_rows: list[dict], path: str | Path) -> None:
 
 def invoice_calculation_details(calc) -> list[tuple[str, str]]:
     """Return [(label, value), ...] from an InvoiceCalculation for the report."""
-    from ...domain.money import fmt_quantity
-
-    rows = [(s.label_ar, s.value_display) for s in calc.steps]
+    rows = [(s.label, s.value_display) for s in calc.steps]
     return rows

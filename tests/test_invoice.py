@@ -17,7 +17,7 @@ D2 = dt.date(2024, 3, 15)
 
 
 def ref_calc(**overrides):
-    s = make_schedule(name="مرجع", rate=Decimal("10"))
+    s = make_schedule(name="Reference", rate=Decimal("10"))
     params = dict(
         subscriber_type=SubscriberType.RESIDENTIAL,
         previous_reading=13578,
@@ -45,24 +45,24 @@ class TestReferenceSample:
 
     def test_steps_present(self):
         calc = ref_calc()
-        labels = [s.label_ar for s in calc.steps]
-        assert "المجموع المطلوب" in labels
-        assert "قيمة الطاقة" in labels
+        labels = [s.label for s in calc.steps]
+        assert "Total due" in labels
+        assert "Energy charge" in labels
         # full chain per spec §12
-        chain = ["القراءة السابقة", "القراءة الحالية", "الاستهلاك", "قيمة الطاقة", "المجموع المطلوب"]
+        chain = ["Previous reading", "Current reading", "Consumption", "Energy charge", "Total due"]
         for c in chain:
             assert c in labels
 
 
 class TestFeesAndDebt:
     def test_fixed_fee_added_to_total(self):
-        charge = InvoiceCharge(name="أجور المقياس", category=ChargeCategory.FIXED_FEE, amount=Money.of(1000))
+        charge = InvoiceCharge(name="Meter fee", category=ChargeCategory.FIXED_FEE, amount=Money.of(1000))
         calc = ref_calc(fees=[charge])
         assert calc.fixed_fees == Money.of(1000)
         assert calc.total_due == Money.of(35840 + 1000)
 
     def test_discount_subtracted(self):
-        charge = InvoiceCharge(name="خصم", category=ChargeCategory.DISCOUNT, amount=Money.of(500))
+        charge = InvoiceCharge(name="Discount", category=ChargeCategory.DISCOUNT, amount=Money.of(500))
         calc = ref_calc(fees=[charge])
         assert calc.discounts == Money.of(500)
         assert calc.total_due == Money.of(35840 - 500)
@@ -86,7 +86,7 @@ class TestComparison:
         assert calc.comparison.status == ComparisonStatus.MISMATCH
         assert not calc.comparison.diff.is_zero
         assert calc.comparison.diff == Money.of(35840 - 36340)
-        assert any("فرق الفاتورة" in c for c in calc.comparison.possible_causes)
+        assert any("Invoice difference" in c for c in calc.comparison.possible_causes)
 
     def test_match_with_rounding_difference_tolerance(self):
         calc = ref_calc(official_amount=Money.of(35840))
@@ -141,23 +141,23 @@ class TestRealInvoiceScenarios:
 
     def test_steps_annotate_extended_thresholds(self):
         calc = InvoiceCalculator.calculate(**self.progressive_params(official_amount=None))
-        labels = [st.label_ar for st in calc.steps]
-        assert "حدود الشرائح ممددة" in labels
-        assert calc.steps[calc.steps.index(next(s for s in calc.steps if s.label_ar == "حدود الشرائح ممددة"))].detail
+        labels = [st.label for st in calc.steps]
+        assert "Extended tier bounds" in labels
+        assert calc.steps[calc.steps.index(next(s for s in calc.steps if s.label == "Extended tier bounds"))].detail
 
     def test_flat_invoice_has_no_threshold_note(self):
         s = make_schedule(rate=Decimal("10"))
         calc = InvoiceCalculator.calculate(
             subscriber_type=SubscriberType.RESIDENTIAL, previous_reading=3000, current_reading=5600,
             previous_read_date=self.PD, current_read_date=self.CD, tariff_schedule=s)
-        labels = [st.label_ar for st in calc.steps]
-        assert "حدود الشرائح ممددة" not in labels
+        labels = [st.label for st in calc.steps]
+        assert "Extended tier bounds" not in labels
 
     def test_mismatch_causes_include_multimonth_bullet(self):
         calc = InvoiceCalculator.calculate(**self.progressive_params(official_amount=Money.of(100000)))
-        assert any("تغطي" in c for c in calc.comparison.possible_causes)
+        assert any("covers" in c for c in calc.comparison.possible_causes)
         assert any("92" in c for c in calc.comparison.possible_causes)
 
     def test_mismatch_causes_include_cumulative_reading_hint(self):
         calc = InvoiceCalculator.calculate(**self.progressive_params(official_amount=Money.of(100000)))
-        assert any("تراكمية" in c for c in calc.comparison.possible_causes)
+        assert any("cumulative" in c for c in calc.comparison.possible_causes)

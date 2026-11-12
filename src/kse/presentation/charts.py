@@ -14,7 +14,6 @@ from . import theme
 from .chart_math import (
     compact_number, donut_spans, label_step, nice_ticks, slot_at, slot_layout, visible_label_indices,
 )
-from .widgets import digits, is_arabic_money
 
 
 def _dot(p: QPainter, x: float, y: float, r: float, color: QColor) -> None:
@@ -298,13 +297,13 @@ def _axis_font(widget: QWidget) -> QFont:
 
 
 def _fmt(value: float) -> str:
-    """Compact axis / value-label text in the active digit style (Western or Arabic-Indic)."""
-    return digits(compact_number(value, arabic=is_arabic_money()))
+    """Compact axis / value-label text (e.g. 3.2K)."""
+    return compact_number(value)
 
 
 def _value_label(value: float, max_width: float, fm: QFontMetrics) -> str:
     """The exact figure (3,210) when it fits above the bar, otherwise the compact form (3.2K)."""
-    full = digits(f"{value:,.0f}")
+    full = f"{value:,.0f}"
     return full if fm.horizontalAdvance(full) <= max_width else _fmt(value)
 
 
@@ -555,11 +554,11 @@ class BarChart(QWidget):
         i = self._hover
         s = g.slots[i]
         total = self._values[i]
-        lines = [self._labels[i] if i < len(self._labels) else "", digits(f"{total:,.0f}")]
+        lines = [self._labels[i] if i < len(self._labels) else "", f"{total:,.0f}"]
         if self._secondary is not None and self._legend:
             paid = min(self._secondary[i], total)
-            lines.append(f"{self._legend[0]}: {digits(f'{paid:,.0f}')}")
-            lines.append(f"{self._legend[1]}: {digits(f'{total - paid:,.0f}')}")
+            lines.append(f"{self._legend[0]}: {paid:,.0f}")
+            lines.append(f"{self._legend[1]}: {total - paid:,.0f}")
         tw = max(fm.horizontalAdvance(t) for t in lines) + 20
         th = fm.height() * len(lines) + 12
         top_y = g.plot.bottom() - g.plot.height() * total / g.axis_max

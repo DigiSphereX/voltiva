@@ -1,1 +1,1 @@
-"""KahrabaSmart Engine — desktop presentation layer."""
+"""Voltiva — desktop presentation layer."""

@@ -12,7 +12,7 @@ from decimal import Decimal
 from ..enums import ComparisonStatus, TariffMethod
 from ..errors import NoTariffFoundError, TariffConflictError
 from ..models import Invoice, InvoiceCharge, TariffFee, TariffSchedule, TariffTier
-from ..money import CURRENCY_AR, Money, round_money
+from ..money import Money, money_label, round_money
 
 
 @dataclass
@@ -46,7 +46,7 @@ class TariffBreakdown:
         if self.rows:
             r = self.rows[0]
             if self.method == TariffMethod.FLAT:
-                return f"{Money(r.rate).display()} {CURRENCY_AR}"
+                return money_label(Money(r.rate))
         return ""
 
 
@@ -82,9 +82,9 @@ class TariffEngine:
                 candidates = zoned
 
         if len(candidates) == 0:
-            raise NoTariffFoundError(sub.label_ar, effective_date)
+            raise NoTariffFoundError(sub.label, effective_date)
         if len(candidates) > 1:
-            raise TariffConflictError([c.name_ar for c in candidates])
+            raise TariffConflictError([c.name for c in candidates])
         return candidates[0]
 
     @staticmethod
@@ -98,7 +98,7 @@ class TariffEngine:
             amount = Money.of(consumption) * rate
             row = TariffBreakdownRow(
                 tier_no=1,
-                label="تعرفة ثابتة",
+                label="Flat rate",
                 from_kwh=Decimal("0"),
                 to_kwh=None,
                 rate=rate,
@@ -110,7 +110,7 @@ class TariffEngine:
                 schedule=schedule,
                 rows=[row],
                 energy_cost=amount,
-                rate_display=f"{Money(rate).display()} {CURRENCY_AR}/kWh",
+                rate_display=f"{money_label(Money(rate))}/kWh",
                 billing_days=safe_days,
                 scale=scale,
             )
@@ -166,7 +166,7 @@ class TariffEngine:
             schedule=schedule,
             rows=rows,
             energy_cost=total,
-            rate_display=f"من {Money(first_rate).display()} {CURRENCY_AR}/kWh (شرائح متدرجة)",
+            rate_display=f"from {money_label(Money(first_rate))}/kWh (progressive tiers)",
             billing_days=safe_days,
             scale=scale,
         )
@@ -192,8 +192,7 @@ def build_invoice_charges_from_tariff(tariff_schedule: TariffSchedule) -> list[I
     charges: list[InvoiceCharge] = []
     for fee in tariff_schedule.fixed_fees:
         charges.append(InvoiceCharge(
-            name=fee.name_ar or fee.name_en,
-            name_en=fee.name_en,
+            name=fee.name,
             category=fee.category,
             amount=fee.amount,
             reason=fee.reason,

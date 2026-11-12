@@ -37,9 +37,6 @@ class TestCompactNumber:
         assert compact_number(-2_500_000) == "-2.5M"
         assert compact_number(2.5) == "2.5"
 
-    def test_arabic_suffix(self):
-        assert compact_number(2_000_000, arabic=True) == "2 مليون"
-
 
 class TestSlots:
     def test_bars_are_capped_and_centered(self):

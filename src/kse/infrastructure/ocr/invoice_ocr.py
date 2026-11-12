@@ -146,7 +146,7 @@ _LABELS = {
 }
 
 # --------------------------------------------------------------------------
-# spatial anchor map — KahrabaSmart_OCR_Config.md §2–§3
+# spatial anchor map — Voltiva OCR layout notes §2–§3
 # anchors are the Arabic keywords ("الكلمة المفتاحية"); the target value sits
 # BELOW the anchor (+Y) and is X-aligned with its bounding box.
 _ANCHORS: dict[str, tuple[str, ...]] = {
@@ -530,8 +530,8 @@ class InvoiceOcr:
     def extract_text(cls, image_path: str, lang: str = "ara+eng") -> str:
         if InvoiceOcr.binary() is None:
             raise OcrUnavailableError(
-                "ميزة الاستيراد من الصورة (OCR) غير متوفرة: يتطلب تثبيت Tesseract OCR.\n"
-                "قم بتثبيته ثم أعد تشغيل البرنامج، أو أدخل القراءات يدوياً."
+                "Image import (OCR) is unavailable: Tesseract OCR must be installed.\n"
+                "Install it and restart the application, or enter the readings manually."
             )
         try:
             pytesseract = cls._configured()
@@ -599,7 +599,7 @@ class InvoiceOcr:
         if prev and curr:
             try:
                 if int(cls.normalize_digits(curr)) < int(cls.normalize_digits(prev)):
-                    warnings.append("القراءة الحالية أصغر من السابقة — راجع البيانات قبل الحفظ.")
+                    warnings.append("The current reading is smaller than the previous one — review the data before saving.")
             except ValueError:
                 pass
 
@@ -612,8 +612,8 @@ class InvoiceOcr:
             drate, computed, raw_official = derived
             if raw_official and computed != raw_official:
                 warnings.append(
-                    f"الحساب المقترح: {consumption} × {drate} = {computed} "
-                    "(راجع المبلغ قبل الحفظ — قد تحتاج القائمة أصلاً للقراءات).")
+                    f"Suggested calculation: {consumption} × {drate} = {computed} "
+                    "(review the amount before saving — the invoice list may need the readings first).")
                 f = fields["official_amount"]
                 fields["official_amount"] = ExtractedField(
                     name="official_amount", value=computed,
@@ -630,7 +630,7 @@ class InvoiceOcr:
 
     @classmethod
     def _anchor_extract(cls, fields: dict[str, ExtractedField], tokens: list[OcrToken]) -> None:
-        """Spatial anchor extraction per KahrabaSmart_OCR_Config.md §2–§3.
+        """Spatial anchor extraction per the Voltiva OCR layout notes §2–§3.
 
         Each anchor keyword's target value sits BELOW it (+Y, next row) and its
         X-center matches/overlaps the anchor's box. Empty boxes yield no value

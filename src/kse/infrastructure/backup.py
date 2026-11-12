@@ -28,13 +28,13 @@ def validate_backup(source_db: str | Path) -> None:
     """
     source_db = Path(source_db)
     if not source_db.is_file():
-        raise FileNotFoundError("ملف النسخة الاحتياطية غير موجود.")
+        raise FileNotFoundError("The backup file does not exist.")
     try:
         # read-only URI: never creates/modifies the candidate file
         uri = source_db.resolve().as_uri() + "?mode=ro"
         con = sqlite3.connect(uri, uri=True)
     except sqlite3.Error as exc:
-        raise InvalidBackupError("الملف ليس قاعدة بيانات SQLite صالحة.") from exc
+        raise InvalidBackupError("The file is not a valid SQLite database.") from exc
     try:
         try:
             check = con.execute("PRAGMA integrity_check").fetchone()
@@ -42,14 +42,14 @@ def validate_backup(source_db: str | Path) -> None:
             version = con.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] \
                 if "schema_migrations" in tables else None
         except sqlite3.Error as exc:
-            raise InvalidBackupError("الملف ليس قاعدة بيانات SQLite صالحة.") from exc
+            raise InvalidBackupError("The file is not a valid SQLite database.") from exc
         if not check or check[0] != "ok":
-            raise InvalidBackupError("ملف النسخة الاحتياطية تالف (فشل فحص السلامة).")
+            raise InvalidBackupError("The backup file is corrupt (integrity check failed).")
         missing = _REQUIRED_TABLES - tables
         if missing:
-            raise InvalidBackupError("الملف ليس نسخة احتياطية من هذا البرنامج.")
+            raise InvalidBackupError("The file is not a backup produced by this application.")
         if version is not None and version > SCHEMA_VERSION:
-            raise InvalidBackupError("النسخة الاحتياطية أحدث من إصدار البرنامج الحالي.")
+            raise InvalidBackupError("The backup is newer than the current application version.")
     finally:
         con.close()
 
@@ -69,10 +69,10 @@ def backup_database(db_path: str | Path, dest: str | Path | None = None) -> Path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if dest is None:
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        dest = db_path.parent / f"kahraba_backup_{stamp}.db"
+        dest = db_path.parent / f"voltiva_backup_{stamp}.db"
     dest = Path(dest)
     if dest.exists() and dest.resolve() == db_path.resolve():
-        raise ValueError("لا يمكن أخذ نسخة احتياطية فوق ملف قاعدة البيانات نفسه.")
+        raise ValueError("A backup cannot be written over the live database file itself.")
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     # Snapshot with the SQLite online-backup API into a temp file, then move it into
@@ -90,7 +90,11 @@ def backup_database(db_path: str | Path, dest: str | Path | None = None) -> Path
     return dest
 
 
-AUTO_PREFIX = "kahraba_autobackup_"
+AUTO_PREFIX = "voltiva_autobackup_"
+# Voltiva 1.1 and earlier wrote auto-backups under the legacy product prefix;
+# they are still this application's own generated files, so they keep being
+# pruned alongside the new ones.
+_LEGACY_AUTO_PREFIX = "kahraba_autobackup_"
 DEFAULT_KEEP = 10
 
 
@@ -100,7 +104,7 @@ def auto_backup(conn: sqlite3.Connection, db_path: str | Path, *, keep: int = DE
     Uses SQLite's online-backup API (consistent even with WAL), writes to a ``.part`` file,
     verifies it with :func:`validate_backup`, then moves it into place - a failed or
     half-written snapshot never replaces or counts as a good backup. Only files created by this
-    function (``kahraba_autobackup_*.db``) are ever pruned; manual backups are never touched.
+    function (``voltiva_autobackup_*.db``) are ever pruned; manual backups are never touched.
     """
     folder = Path(db_path).parent / "backups"
     folder.mkdir(parents=True, exist_ok=True)
@@ -120,8 +124,9 @@ def auto_backup(conn: sqlite3.Connection, db_path: str | Path, *, keep: int = DE
                 tmp.unlink()
             except OSError:
                 pass
-    old = sorted(folder.glob(f"{AUTO_PREFIX}*.db"))[:-max(1, keep)]
-    for path in old:
+    managed = sorted(p for p in folder.glob(f"{AUTO_PREFIX}*.db"))
+    managed += sorted(p for p in folder.glob(f"{_LEGACY_AUTO_PREFIX}*.db"))
+    for path in managed[:-max(1, keep)] if len(managed) > keep else []:
         try:
             path.unlink()
         except OSError:
@@ -138,7 +143,7 @@ def restore_database(db_path: str | Path, source_db: str | Path) -> Path:
     db_path = Path(db_path)
     source_db = Path(source_db)
     if db_path.exists() and source_db.exists() and source_db.resolve() == db_path.resolve():
-        raise ValueError("لا يمكن الاستعادة من نفس ملف قاعدة البيانات.")
+        raise ValueError("A database cannot be restored from itself.")
     validate_backup(source_db)
 
     db_path.parent.mkdir(parents=True, exist_ok=True)

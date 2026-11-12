@@ -26,7 +26,7 @@ def make_context(mem_db):
 class TestInvoiceService:
     def test_calculate_and_save(self, mem_db):
         _, svc, sub_svc, _ = make_context(mem_db)
-        sub = sub_svc.find_or_create("1201234567", name="مشترك تجريبي")
+        sub = sub_svc.find_or_create("1201234567", name="Test Subscriber")
 
         req = CalculateInvoiceRequest(
             subscriber_type=SubscriberType.RESIDENTIAL,
@@ -55,10 +55,8 @@ class TestInvoiceService:
 
         _, svc, _, repos = make_context(mem_db)
         # add a SMART_METER residential schedule alongside the seeded TRADITIONAL flat one
-        smart = make_schedule(name="ذكي", method=repos["tariffs"].list_schedules()[0].method)
+        smart = make_schedule(name="Smart", method=repos["tariffs"].list_schedules()[0].method)
         smart.service_zone = ServiceZone.SMART_METER
-        smart.name_en = "smart"
-        smart.name_ar = "ذكي"
         repos["tariffs"].save_schedule(smart)
         mem_db.commit()
 
@@ -120,7 +118,7 @@ class TestInvoiceService:
         from kse.domain.models import TariffTier
 
         _, svc, sub_svc, repos = make_context(mem_db)
-        sub = sub_svc.find_or_create("1201234567", name="مشترك")
+        sub = sub_svc.find_or_create("1201234567", name="Subscriber")
         req = CalculateInvoiceRequest(
             subscriber_type=SubscriberType.RESIDENTIAL,
             previous_reading="13578",
@@ -197,13 +195,13 @@ class TestTariffTierConventions:
 class TestSubscriberService:
     def test_find_or_create(self, mem_db):
         _, _, svc, _ = make_context(mem_db)
-        s1 = svc.find_or_create("1000", name="أول")
-        s2 = svc.find_or_create("1000", name="ثاني")
+        s1 = svc.find_or_create("1000", name="First")
+        s2 = svc.find_or_create("1000", name="Second")
         assert s1.id == s2.id  # identity preserved by account_no
 
     def test_delete_removes_subscriber(self, mem_db):
         _, _, svc, repos = make_context(mem_db)
-        s = svc.find_or_create("2000", name="لحذف")
+        s = svc.find_or_create("2000", name="To Delete")
         assert svc.subscribers.get(s.id) is not None
         svc.delete(s.id)
         assert svc.subscribers.get(s.id) is None
@@ -235,7 +233,7 @@ class TestPeriodIntegrity:
 
     def test_save_without_explicit_dates_keeps_the_priced_period(self, mem_db):
         _, svc, sub_svc, _ = make_context(mem_db)
-        sub = sub_svc.find_or_create("1201234567", name="مشترك")
+        sub = sub_svc.find_or_create("1201234567", name="Subscriber")
         calc, schedule = svc.calculate(self._req())
         invoice = svc.save_calculation(calc, schedule, sub)
         assert invoice.previous_read_date == dt.date(2024, 2, 1)

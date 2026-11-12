@@ -46,8 +46,7 @@ SETTING_KEYS = {
 
 def build_sample_schedules() -> list[TariffSchedule]:
     flat = TariffSchedule(
-        name_ar="Residential Reference 2024 (Demo)",
-        name_en="Residential Reference 2024 (Demo)",
+        name="Residential Reference 2024 (Demo)",
         subscriber_type=SubscriberType.RESIDENTIAL,
         method=TariffMethod.FLAT,
         version="v1/demo",
@@ -62,8 +61,7 @@ def build_sample_schedules() -> list[TariffSchedule]:
     flat.tiers = [TariffTier(tier_no=1, from_kwh=Decimal("0"), to_kwh=None, rate_per_kwh=Decimal("10"))]
 
     prog = TariffSchedule(
-        name_ar="Commercial Tiers 2024 (Demo)",
-        name_en="Commercial Tiers 2024 (Demo)",
+        name="Commercial Tiers 2024 (Demo)",
         subscriber_type=SubscriberType.COMMERCIAL,
         method=TariffMethod.PROGRESSIVE,
         version="v1/demo",
@@ -153,7 +151,7 @@ def _insert_demo_invoice(invoice_repo: SqliteInvoiceRepository, *, sub: Subscrib
         adjusted_kwh=calc.reading.adjusted_kwh,
         tariff_schedule_id=schedule.id,
         tariff_version=schedule.version,
-        tariff_name=schedule.name_en,
+        tariff_name=schedule.name,
         energy_cost=calc.energy_cost,
         current_amount=calc.current_amount,
         total_due=calc.total_due,

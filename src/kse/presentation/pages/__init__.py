@@ -1,1 +1,1 @@
-"""UI pages for the KahrabaSmart desktop app."""
+"""UI pages for the Voltiva desktop app."""

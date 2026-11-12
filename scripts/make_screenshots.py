@@ -1,7 +1,7 @@
-"""Regenerate the README screenshots (all pages + dialogs, light and dark, English or Arabic).
+"""Regenerate the README screenshots (all pages + dialogs, light and dark, any UI language).
 
     python scripts/make_screenshots.py                     # English  -> ScreenShot/<page>.png, <page>-dark.png
-    python scripts/make_screenshots.py --lang ar           # Arabic   -> ScreenShot/<page>-ar.png, <page>-ar-dark.png
+    python scripts/make_screenshots.py --lang fr           # French   -> ScreenShot/<page>-fr.png, <page>-fr-dark.png
     python scripts/make_screenshots.py --out some/folder   # another output folder
     python scripts/make_screenshots.py --offscreen         # headless (CI); fonts look slightly different
 
@@ -58,8 +58,10 @@ def enrich(ctx) -> int:
 
 
 def main() -> int:
+    from kse.presentation.i18n import LANGS
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--lang", default="en", choices=["en", "ar"])
+    ap.add_argument("--lang", default="en", choices=list(LANGS))
     ap.add_argument("--out", default=os.path.join(ROOT, "ScreenShot"))
     ap.add_argument("--offscreen", action="store_true")
     ap.add_argument("--pages", nargs="*", help="only these pages (default: all) - dialogs are skipped")
@@ -102,7 +104,7 @@ def main() -> int:
         widget.grab().save(path)
         print("saved", path, flush=True)
 
-    suffix_lang = "" if args.lang == "en" else "-ar"
+    suffix_lang = "" if args.lang == "en" else f"-{args.lang}"
     pages = args.pages or PAGES
     for theme_name in ("light", "dark"):
         theme.apply(app, theme_name)

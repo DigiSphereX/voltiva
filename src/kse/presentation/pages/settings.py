@@ -94,12 +94,6 @@ class SettingsPage(QWidget):
         for code, name in CURRENCIES.items():
             self.currency_combo.addItem(f"{code} — {name}", code)
 
-        self.digits_combo = QComboBox()
-        self.digits_combo.setToolTip(self.tr("tt_st_digits"))
-        self.digits_combo.addItem(self.tr("st_auto"), "auto")
-        self.digits_combo.addItem(self.tr("st_digits_arabic"), "arabic")
-        self.digits_combo.addItem(self.tr("st_digits_western"), "western")
-
         self.ai_mode_combo = QComboBox()
         self.ai_mode_combo.setToolTip(self.tr("tt_st_ai_mode"))
         for mode, key in (
@@ -186,7 +180,6 @@ class SettingsPage(QWidget):
             (self.tr("st_language"), self.lang_combo),
             (self.tr("st_theme"), theme_row),
             (self.tr("st_currency"), self.currency_combo),
-            (self.tr("st_digits"), self.digits_combo),
         ):
             form.addRow(form_label(label, 140), widget)
 
@@ -288,7 +281,6 @@ class SettingsPage(QWidget):
         self.lang_combo.currentIndexChanged.connect(self._set_language)
         self.theme_combo.currentIndexChanged.connect(self._set_theme)
         self.currency_combo.currentIndexChanged.connect(self._set_currency)
-        self.digits_combo.currentIndexChanged.connect(self._set_digits)
         self.ai_mode_combo.currentIndexChanged.connect(self._on_ai_mode_changed)
         self.ai_save_btn.clicked.connect(self._save_ai)
         self.ai_test_btn.clicked.connect(self._test_ai)
@@ -318,9 +310,6 @@ class SettingsPage(QWidget):
         cidx = self.currency_combo.findData(self.app.current_currency_pref())
         if cidx >= 0:
             self.currency_combo.setCurrentIndex(cidx)
-        didx = self.digits_combo.findData(self.app.current_digits_pref())
-        if didx >= 0:
-            self.digits_combo.setCurrentIndex(didx)
         self._load_ai()
 
     # ---- AI scanning ---------------------------------------------------
@@ -504,11 +493,6 @@ class SettingsPage(QWidget):
         if pref and pref != self.app.current_currency_pref():
             self.app.set_currency_pref(pref)
             self.app.notify_refresh()
-
-    def _set_digits(self) -> None:
-        pref = self.digits_combo.currentData()
-        if pref and pref != self.app.current_digits_pref():
-            self.app.set_digits_pref(pref)
 
     def _backup(self) -> None:
         try:

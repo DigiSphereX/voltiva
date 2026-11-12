@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from kse.domain.money import Money, arabic_digits, fmt_quantity, latin_digits, round_money
+from kse.domain.money import Money, fmt_quantity, latin_digits, money_label, round_money
 
 
 class TestMoney:
@@ -11,7 +11,7 @@ class TestMoney:
         m = Money.of(35840)
         assert m.raw == Decimal("35840.00")
         assert m.display() == "35,840"
-        assert m.display_ar() == "٣٥٬٨٤٠ د.ع"
+        assert money_label(m, "IQD") == "35,840 IQD"
 
     def test_rounding_halves_up(self):
         assert round_money("12345.545") == Decimal("12345.55")
@@ -68,8 +68,5 @@ class TestMoney:
 
 
 class TestDigits:
-    def test_arabic_indic(self):
-        assert arabic_digits("35,840") == "٣٥٬٨٤٠"
-
     def test_latin_roundtrip(self):
         assert latin_digits("٣٥٬٨٤٠") == "35,840"

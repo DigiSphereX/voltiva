@@ -2,7 +2,7 @@
 calculation detail (spec §8, §12, §14, §39).
 
 The result contains step-by-step lines so the UI can always answer:
-"كيف وصلت إلى هذا الرقم؟" (How did you arrive at this number?)
+"How did you arrive at this number?"
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from typing import Callable, Optional
 
 from ..enums import ChargeCategory, ComparisonStatus, DataSource, SubscriberType, TariffMethod
 from ..models import Invoice, InvoiceCharge, InvoiceReading, TariffSchedule, TariffTier
-from ..money import CURRENCY_AR, Money, fmt_quantity, round_money
+from ..money import Money, fmt_quantity, money_label, round_money
 from .consumption import ConsumptionCalculator, ConsumptionResult
 from .fees import FeeCalculator, FeeResult
 from .tariff import TariffBreakdown, TariffBreakdownRow, TariffEngine, build_invoice_charges_from_tariff
@@ -23,44 +23,30 @@ from .debt import DebtCalculator
 
 TrFn = Callable[..., str]
 
-# Arabic fallback messages so domain-level callers (and tests) keep working without an i18n engine.
-_CMP_AR = {
-    "cmp_diff": "فرق الفاتورة: {amount}",
-    "cmp_hint": "السبب المحتمل:",
-    "cmp_months": "  • الفاتورة تغطي {days} يوماً ({months} أشهر تقريباً): حدود الشرائح ممددة ×{scale} ونسبة الرسوم قد تكون كاملة لكل الشهر",
-    "cmp_debt": "  • الدين السابق: {amount}",
-    "cmp_fees": "  • رسوم إضافية بقيمة {amount}",
-    "cmp_discount": "  • خصم بقيمة {amount}",
-    "cmp_multiplier": "  • معامل العداد: {value}",
-    "cmp_cumulative": "  • القراءة قد تكون تراكمية (فرق القراءتين) وليست الاستهلاك الشهري",
-    "cmp_estimated": "  • التعرفة المستخدمة تقديرية وقد تختلف عن الرسمية",
-    "cmp_rounding": "  • الفرق ضئيل وقد يكون بسبب التقريب",
+# English fallback messages so domain-level callers (and tests) keep working
+# without an i18n engine.
+_CMP_EN = {
+    "cmp_diff": "Invoice difference: {amount}",
+    "cmp_hint": "Possible cause:",
+    "cmp_months": "  • The invoice covers {days} days (~{months} months): tier bounds were extended ×{scale} and fee ratios may apply for the full month",
+    "cmp_debt": "  • Previous debt: {amount}",
+    "cmp_fees": "  • Additional fees totalling {amount}",
+    "cmp_discount": "  • Discount of {amount}",
+    "cmp_multiplier": "  • Meter multiplier: {value}",
+    "cmp_cumulative": "  • The reading may be cumulative (difference of readings) rather than the monthly consumption",
+    "cmp_estimated": "  • The tariff used is an estimate and may differ from the official one",
+    "cmp_rounding": "  • The difference is small and may be caused by rounding",
 }
 
 
-def _ar_tr(key: str, **kwargs) -> str:
-    text = _CMP_AR.get(key, key)
+def _en_tr(key: str, **kwargs) -> str:
+    text = _CMP_EN.get(key, key)
     return text.format(**kwargs) if kwargs else text
-
-
-def _money_ar(m: Money) -> str:
-    """Amount label consistent with the running UI style (Arabic-Indic + د.ع vs ISO code).
-
-    Domain callers default to the Arabic style; when called through the UI the
-    presentation layer picks the style via widgets.is_arabic_money().
-    """
-    from ..money import is_arabic_display  # noqa: PLC0415
-
-    if is_arabic_display():
-        return m.display_ar()
-    from ...presentation.currencies import get_currency_code  # noqa: PLC0415
-
-    return f"{m.display()} {get_currency_code()}"
 
 
 @dataclass
 class CalculationStep:
-    label_ar: str
+    label: str
     value_display: str
     raw_value: str = ""
     is_subtotal: bool = False
@@ -150,7 +136,7 @@ class InvoiceCalculator:
             # tier limits by days/30 would shrink them to a fraction and multiply the
             # bill. Never guess - the caller must supply a real period.
             raise VerificationNeededError(
-                "تاريخ القراءة الحالية يجب أن يكون بعد تاريخ القراءة السابقة.")
+                "The current reading date must be after the previous reading date.")
         safe_days = days
 
         # --- 2. Tariff energy cost ---
@@ -230,107 +216,107 @@ def _build_steps(
     steps: list[CalculationStep] = []
 
     steps.append(CalculationStep(
-        label_ar="القراءة السابقة",
+        label="Previous reading",
         value_display=f"{fmt_quantity(reading.previous_reading)} kWh",
         raw_value=str(reading.previous_reading),
     ))
     steps.append(CalculationStep(
-        label_ar="القراءة الحالية",
+        label="Current reading",
         value_display=f"{fmt_quantity(reading.current_reading)} kWh",
         raw_value=str(reading.current_reading),
     ))
     if reading.scenario != MeterScenario.NORMAL:
         steps.append(CalculationStep(
-            label_ar="الحالة",
-            value_display=reading.scenario.label_ar,
+            label="Status",
+            value_display=reading.scenario.label,
         ))
     steps.append(CalculationStep(
-        label_ar="الاستهلاك",
+        label="Consumption",
         value_display=f"{fmt_quantity(reading.consumption_kwh)} kWh",
         raw_value=str(reading.consumption_kwh),
     ))
 
     if reading.multiplier != Decimal("1"):
         steps.append(CalculationStep(
-            label_ar="معامل العداد",
+            label="Meter multiplier",
             value_display=str(reading.multiplier),
             raw_value=str(reading.multiplier),
         ))
         steps.append(CalculationStep(
-            label_ar="الاستهلاك المعدل",
+            label="Adjusted consumption",
             value_display=f"{fmt_quantity(reading.adjusted_kwh)} kWh",
             raw_value=str(reading.adjusted_kwh),
         ))
 
     steps.append(CalculationStep(
-        label_ar="المدة الزمنية",
-        value_display=f"{days} يوماً",
+        label="Billing period",
+        value_display=f"{days} days",
     ))
-    steps.append(CalculationStep(is_divider=True, label_ar="", value_display=""))
+    steps.append(CalculationStep(is_divider=True, label="", value_display=""))
 
     steps.append(CalculationStep(
-        label_ar="جدول التعرفة",
-        value_display=tariff.schedule.name_ar if tariff.schedule else "—",
-        detail=f"المصدر: {tariff.schedule.source.label_ar if tariff.schedule else '—'} | النسخة: {tariff.schedule.version if tariff.schedule else '—'}",
+        label="Tariff schedule",
+        value_display=tariff.schedule.name if tariff.schedule else "—",
+        detail=(f"Source: {tariff.schedule.source.label if tariff.schedule else '—'} | "
+                f"Version: {tariff.schedule.version if tariff.schedule else '—'}"),
     ))
 
     # Tier details
     if tariff.method == TariffMethod.FLAT and tariff.rows:
         r = tariff.rows[0]
         steps.append(CalculationStep(
-            label_ar="سعر الطاقة",
-            value_display=f"{Money(r.rate).display()} {CURRENCY_AR}/kWh",
+            label="Energy rate",
+            value_display=f"{money_label(Money(r.rate))}/kWh",
             raw_value=str(r.rate),
         ))
     else:
         if tariff.scale != Decimal("1"):
             scale_txt = f"{tariff.scale:.2f}".rstrip("0").rstrip(".")
             steps.append(CalculationStep(
-                label_ar="حدود الشرائح ممددة",
-                # Language-neutral value; the period itself is the "المدة الزمنية" step
+                label="Extended tier bounds",
+                # Language-neutral value; the period itself is the "Billing period" step
                 # and the full explanation stays in `detail` for the audit trail.
                 value_display=f"×{scale_txt}",
-                detail=(f"الفاتورة تغطي {days} يوماً؛ الشرائح منشورة لكل 30 يوماً "
-                        "وتُضرب حدودها بنسبة أيام الدورة / 30"),
+                detail=(f"The invoice covers {days} days; tiers are published per 30 days, "
+                        "so their bounds are scaled by the ratio period days / 30"),
             ))
         for r in tariff.rows:
             if r.quantity > 0:
                 steps.append(CalculationStep(
-                    label_ar=f"الشريحة {r.tier_no}",
-                    value_display=f"{fmt_quantity(r.quantity)} kWh × {Money(r.rate).display()} = {Money(r.amount).display()} {CURRENCY_AR}",
+                    label=f"Tier {r.tier_no}",
+                    value_display=f"{fmt_quantity(r.quantity)} kWh × {Money(r.rate).display()} = {money_label(Money(r.amount))}",
                 ))
 
-    steps.append(CalculationStep(is_divider=True, label_ar="", value_display=""))
+    steps.append(CalculationStep(is_divider=True, label="", value_display=""))
 
     steps.append(CalculationStep(
-        label_ar="قيمة الطاقة",
-        value_display=f"{energy.display()} {CURRENCY_AR}",
+        label="Energy charge",
+        value_display=money_label(energy),
         raw_value=str(energy.raw),
         is_subtotal=True,
     ))
 
     for c in fee_result.charges:
-        val = c.amount.display()
         sign = "-" if c.category == ChargeCategory.DISCOUNT else "+"
         if c.in_current_amount:
             steps.append(CalculationStep(
-                label_ar=f"{sign} {c.name}",
-                value_display=f"{val} {CURRENCY_AR}",
+                label=f"{sign} {c.name}",
+                value_display=money_label(c.amount),
                 raw_value=str(c.amount.raw),
             ))
 
     if debt_total > Money.zero():
         steps.append(CalculationStep(
-            label_ar="+ الدين السابق",
-            value_display=f"{debt_total.display()} {CURRENCY_AR}",
+            label="+ Previous debt",
+            value_display=money_label(debt_total),
             raw_value=str(debt_total.raw),
         ))
 
-    steps.append(CalculationStep(is_divider=True, label_ar="", value_display=""))
+    steps.append(CalculationStep(is_divider=True, label="", value_display=""))
 
     steps.append(CalculationStep(
-        label_ar="المجموع المطلوب",
-        value_display=f"{total.display()} {CURRENCY_AR}",
+        label="Total due",
+        value_display=money_label(total),
         raw_value=str(total.raw),
         is_subtotal=True,
         is_header=True,
@@ -349,7 +335,7 @@ def _compare(
     days: int,
     tr: Optional[TrFn] = None,
 ) -> InvoiceComparison:
-    tr = tr or _ar_tr
+    tr = tr or _en_tr
     diff = calculated - official
     diff_abs = Money(abs(diff.raw))
     ratio = (diff_abs.raw / official.raw * 100) if official.raw != 0 else Decimal("0")
@@ -357,7 +343,7 @@ def _compare(
 
     causes: list[str] = []
     if not diff.is_zero:
-        causes.append(tr("cmp_diff", amount=_money_ar(diff_abs)))
+        causes.append(tr("cmp_diff", amount=money_label(diff_abs)))
         causes.append(tr("cmp_hint"))
 
         # Heuristic cause analysis
@@ -367,11 +353,11 @@ def _compare(
             causes.append(tr("cmp_months", days=days, months=months,
                              scale=f"{tariff.scale:.2f}"))
         if debt_total > Money.zero():
-            causes.append(tr("cmp_debt", amount=_money_ar(debt_total)))
+            causes.append(tr("cmp_debt", amount=money_label(debt_total)))
         if fee_total_used > Money.zero():
-            causes.append(tr("cmp_fees", amount=_money_ar(fee_total_used)))
+            causes.append(tr("cmp_fees", amount=money_label(fee_total_used)))
         if fee_result.discounts_total > Money.zero():
-            causes.append(tr("cmp_discount", amount=_money_ar(fee_result.discounts_total)))
+            causes.append(tr("cmp_discount", amount=money_label(fee_result.discounts_total)))
         if reading.multiplier != Decimal("1"):
             causes.append(tr("cmp_multiplier", value=reading.multiplier))
         if tariff.scale != Decimal("1") and tariff.method != TariffMethod.FLAT:

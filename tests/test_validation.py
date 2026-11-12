@@ -83,7 +83,7 @@ class TestTariff:
         from kse.domain.enums import SubscriberType, TariffMethod
         from kse.domain.models import TariffSchedule
 
-        s = TariffSchedule(name_ar="x", subscriber_type=SubscriberType.RESIDENTIAL,
+        s = TariffSchedule(name="x", subscriber_type=SubscriberType.RESIDENTIAL,
                            method=TariffMethod.FLAT, effective_from=dt.date(2024, 1, 1),
                            tiers=[])
         r = ValidationEngine.validate_tariff(s)
@@ -112,7 +112,7 @@ class TestTariff:
         assert any(i.code == "TARIFF_OVERLAP" for i in r.errors)
 
     def test_printed_invoice_convention_accepted(self):
-        """i.e. the exact entries from a real قائمة أجور (1-1500, 1501-3000, …)."""
+        """i.e. the exact entries from a real printed tariff sheet (1-1500, 1501-3000, …)."""
         from kse.domain.enums import TariffMethod
         from kse.domain.models import TariffTier
         from conftest import make_schedule

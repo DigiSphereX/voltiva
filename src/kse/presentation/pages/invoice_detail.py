@@ -14,7 +14,7 @@ from ...domain.money import fmt_quantity
 from ...infrastructure.export.pdf_exporter import build_invoice_html, build_receipt_html, print_invoice, render_to_pdf
 from .. import theme
 from ..widgets import (
-    DataTable, PageHeader, Section, configure_table, danger_small_button, digits,
+    DataTable, PageHeader, Section, configure_table, danger_small_button,
     error_text, ghost_button, money_display, primary_button, small_button,
 )
 
@@ -146,19 +146,19 @@ class InvoiceDetailPage(QWidget):
             return
         self.header.set_title(
             f"{invoice.invoice_no} — {invoice.subscriber_name}",
-            digits(invoice.issue_date.strftime("%d/%m/%Y")) + " · "
+            invoice.issue_date.strftime("%d/%m/%Y") + " · "
             + self.app.i18n.enum_label(invoice.payment_status))
         charges = self.app.repos["invoices"].list_charges(invoice_id)
 
         rows = [
             (self.tr("iv_no"), invoice.invoice_no),
-            (self.tr("iv_account"), digits(invoice.account_no)),
+            (self.tr("iv_account"), str(invoice.account_no)),
             (self.tr("iv_subscriber"), invoice.subscriber_name),
-            (self.tr("iv_date"), digits(invoice.issue_date.strftime("%d/%m/%Y"))),
-            (self.tr("iv_prev_reading"), digits(fmt_quantity(invoice.previous_reading))),
-            (self.tr("iv_curr_reading"), digits(fmt_quantity(invoice.current_reading))),
-            (self.tr("iv_consumption"), f"{digits(fmt_quantity(invoice.consumption_kwh))} {self.tr('unit_kwh')}"),
-            (self.tr("iv_adjusted"), f"{digits(fmt_quantity(invoice.adjusted_kwh))} {self.tr('unit_kwh')}"),
+            (self.tr("iv_date"), invoice.issue_date.strftime("%d/%m/%Y")),
+            (self.tr("iv_prev_reading"), fmt_quantity(invoice.previous_reading)),
+            (self.tr("iv_curr_reading"), fmt_quantity(invoice.current_reading)),
+            (self.tr("iv_consumption"), f"{fmt_quantity(invoice.consumption_kwh)} {self.tr('unit_kwh')}"),
+            (self.tr("iv_adjusted"), f"{fmt_quantity(invoice.adjusted_kwh)} {self.tr('unit_kwh')}"),
             (self.tr("iv_tariff"), f"{invoice.tariff_name} (v{invoice.tariff_version})"),
             (self.tr("iv_energy"), money_display(invoice.energy_cost)),
             (self.tr("iv_fixed"), money_display(invoice.fixed_fees)),
@@ -298,7 +298,7 @@ class InvoiceDetailPage(QWidget):
         for r, pay in enumerate(self._payments):
             method_key = "pay_method_" + str(pay.method).lower()
             method = self.tr(method_key)
-            cells = [(digits(pay.paid_at.strftime("%d/%m/%Y")), left),
+            cells = [(pay.paid_at.strftime("%d/%m/%Y"), left),
                      (money_display(pay.amount), right),
                      (method if method != method_key else str(pay.method), left),
                      (pay.notes or "", left)]
@@ -338,9 +338,9 @@ class InvoiceDetailPage(QWidget):
             if not path:
                 return
             from ..currencies import get_currency_code
-            html = build_receipt_html(invoice, payment, lang=self.app.i18n.lang, i18n=self.app.i18n,
+            html = build_receipt_html(invoice, payment, i18n=self.app.i18n,
                                       currency=get_currency_code())
-            render_to_pdf(html, path, page_lang=self.app.i18n.lang)
+            render_to_pdf(html, path)
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, self.tr("error"), error_text(self.app, exc))
 
@@ -356,8 +356,8 @@ class InvoiceDetailPage(QWidget):
             from ..currencies import get_currency_code
             html = build_invoice_html(
                 invoice, reading, charges,
-                lang=self.app.i18n.lang, i18n=self.app.i18n, currency=get_currency_code())
-            print_invoice(html, page_lang=self.app.i18n.lang)
+                i18n=self.app.i18n, currency=get_currency_code())
+            print_invoice(html)
         except Exception as exc:
             QMessageBox.warning(self, self.tr("error"), error_text(self.app, exc))
 
@@ -377,7 +377,7 @@ class InvoiceDetailPage(QWidget):
             from ..currencies import get_currency_code
             html = build_invoice_html(
                 invoice, reading, charges,
-                lang=self.app.i18n.lang, i18n=self.app.i18n, currency=get_currency_code())
+                i18n=self.app.i18n, currency=get_currency_code())
             render_to_pdf(html, path)
             QMessageBox.information(
                 self, self.tr("success"),

@@ -122,7 +122,7 @@ class TestServices:
         s = make_schedule(name='Tariff "A" \\ x')
         saved = svc.save(s)
         entry = [e for e in repos["audit"].list_recent(50) if e.action == "TARIFF_SAVE"][0]
-        assert json.loads(entry.details_json)["name_ar"] == saved.name_ar
+        assert json.loads(entry.details_json)["name"] == saved.name
 
     def test_subscriber_service_meters_of(self, mem_db):
         _, sub_svc, _ = _ctx(mem_db)

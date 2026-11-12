@@ -12,7 +12,7 @@ from .. import theme
 from ..app_context import default_issue_dates
 from ..widgets import (
     DataTable, FormRow, MoneyEdit, PageHeader, ReadingEdit, Section, chip_cell,
-    configure_table, date_edit, digits, error_label, error_text, money_display,
+    configure_table, date_edit, error_label, error_text, money_display,
     primary_button,
 )
 
@@ -146,7 +146,7 @@ class VerifyPage(QWidget):
                 rows += [
                     (self.tr("vk_official"), money_display(cmp.official_amount), "amount"),
                     (self.tr("vk_diff"), money_display(cmp.diff), "diff"),
-                    (self.tr("vk_ratio"), f"{digits(f'{cmp.ratio_pct:.1f}')}%", "amount"),
+                    (self.tr("vk_ratio"), f"{cmp.ratio_pct:.1f}%", "amount"),
                     (self.tr("vk_status"), status_text, "status"),
                 ]
             self.result_table.setRowCount(len(rows))

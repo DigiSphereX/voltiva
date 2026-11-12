@@ -8,10 +8,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..domain.money import Money, fmt_quantity, set_arabic_display
+from ..domain.money import Money, fmt_quantity, money_label
 from . import theme
 
-_MONEY_LANG = "en"
 _UI_LANG = "en"
 
 
@@ -27,42 +26,9 @@ def rtl_active() -> bool:
     return _UI_LANG in RTL_LANGS
 
 
-def set_money_lang(lang: str) -> None:
-    """Switch number/currency formatting style.
-
-    "ar" → Arabic-Indic digits + "د.ع"; anything else → Western digits + ISO code.
-    """
-    global _MONEY_LANG
-    _MONEY_LANG = "ar" if lang == "ar" else "en"
-    set_arabic_display(_MONEY_LANG == "ar")
-
-
-def is_arabic_money() -> bool:
-    """True when Arabic-Indic digits + "د.ع" are currently active."""
-    return _MONEY_LANG == "ar"
-
-
-def digits(text) -> str:
-    """Render a numeric string per the active digit style (Arabic-Indic vs Western)."""
-    if _MONEY_LANG != "ar":
-        return str(text)
-    from ..domain.money import arabic_digits
-    return arabic_digits(str(text))
-
-
-def currency_label() -> str:
-    """The display symbol: Arabic "د.ع" in Arabic style, else the ISO code (e.g. IQD)."""
-    if _MONEY_LANG == "ar":
-        from ..domain.money import CURRENCY_AR
-        return CURRENCY_AR
-    from .currencies import get_currency_code
-    return get_currency_code()
-
-
 def qty_display(value, unit: str = "") -> str:
-    """Format a quantity with grouping, in the active digit style."""
-    rendered = digits(fmt_quantity(value))
-    return f"{rendered} {unit}".strip()
+    """Format a quantity with grouping, e.g. ``12,345 kWh``."""
+    return f"{fmt_quantity(value)} {unit}".strip()
 
 
 def caption(label: str) -> QLabel:
@@ -228,10 +194,8 @@ def field_row(label: str, widget: QWidget, label_width: int = 180) -> QHBoxLayou
 
 
 def money_display(value: Money) -> str:
-    if _MONEY_LANG == "ar":
-        return value.display_ar()
-    from .currencies import get_currency_code
-    return f"{value.display()} {get_currency_code()}"
+    """Amount with the active ISO currency code, e.g. ``12,345 USD``."""
+    return money_label(value)
 
 
 def error_text(app, exc: Exception) -> str:

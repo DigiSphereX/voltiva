@@ -68,9 +68,6 @@ class TariffRepository(ABC):
     def delete_schedule(self, schedule_id: int) -> None: ...
 
     @abstractmethod
-    def save_fee(self, fee: TariffFee) -> TariffFee: ...
-
-    @abstractmethod
     def delete_fee(self, fee_id: int) -> None: ...
 
 

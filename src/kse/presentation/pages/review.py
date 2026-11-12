@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 from .. import theme
 from ..charts import StatCard
 from ..widgets import (
-    CardGrid, DataTable, PageHeader, chip_cell, configure_table, digits, money_display,
+    CardGrid, DataTable, PageHeader, chip_cell, configure_table, money_display,
 )
 from ...domain.money import fmt_quantity
 
@@ -98,9 +98,9 @@ class ReviewPage(QWidget):
                 status_color = colors["success"]
 
             items = [
-                (digits(row["month"]), None),
-                (digits(str(row["count"])), None),
-                (digits(fmt_quantity(row["kwh"])), None),
+                (str(row["month"]), None),
+                (str(row["count"]), None),
+                (fmt_quantity(row["kwh"]), None),
                 (money_display(row["computed"]), None),
                 (money_display(row["official"]) if has_official else "—", None),
                 (money_display(diff) if has_official else "—", status_color if diff.raw else None),
@@ -124,6 +124,6 @@ class ReviewPage(QWidget):
         self.card_diff.set_value(money_display(diff))
         self.card_diff.lbl_value.setStyleSheet(
             f"color: {colors['danger'] if diff.raw > 0 else colors['success'] if diff.raw < 0 else colors['text']};")
-        self.card_over.set_value(digits(str(totals["overcharge_months"])))
+        self.card_over.set_value(str(totals["overcharge_months"]))
         self.card_official.set_value(money_display(totals["official"]))
         self.card_computed.set_value(money_display(totals["computed"]))

@@ -14,7 +14,7 @@ from ..infrastructure.sqlite.seed import seed
 from . import theme
 from .currencies import CURRENCIES, set_currency_code
 from .i18n import I18n
-from .widgets import set_money_lang, set_ui_lang
+from .widgets import set_ui_lang
 
 
 class AppContext:
@@ -27,7 +27,6 @@ class AppContext:
         self.repos = build_repositories(self.conn)
         self.i18n = I18n(lang or self.effective_language())
         set_ui_lang(self.i18n.lang)
-        self._sync_money_display()
         self._build_services()
         self._nav_handler = None
         self._invoice_handler = None
@@ -133,7 +132,6 @@ class AppContext:
             return False
         set_ui_lang(lang)          # before listeners rebuild pages / calendars
         self.i18n.set_lang(lang)
-        self._sync_money_display()
         return True
 
     def current_currency(self) -> str:
@@ -238,37 +236,6 @@ class AppContext:
             pass
         set_currency_code(code)
         return code
-
-    def current_digits_pref(self) -> str:
-        """Persisted number-style preference: "auto" | "arabic" | "western"."""
-        try:
-            stored = self.repos["settings"].get("digits_pref", "")
-        except Exception:
-            stored = ""
-        return stored if stored in ("auto", "arabic", "western") else "auto"
-
-    def current_digits(self) -> str:
-        """The resolved, effective number style ("arabic" | "western")."""
-        pref = self.current_digits_pref()
-        if pref != "auto":
-            return pref
-        return "arabic" if self.i18n.lang == "ar" else "western"
-
-    def set_digits_pref(self, pref: str) -> str:
-        """Persist the number-style preference and apply it to all rendering."""
-        pref = pref if pref in ("auto", "arabic", "western") else "auto"
-        try:
-            self.repos["settings"].set("digits_pref", pref, DataSource.USER_DEFINED)
-            self.conn.commit()
-        except Exception:
-            pass
-        self._sync_money_display()
-        self.notify_refresh()
-        return self.current_digits()
-
-    def _sync_money_display(self) -> None:
-        """Push the resolved digit/currency style to the presentation formatters."""
-        set_money_lang("ar" if self.current_digits() == "arabic" else "en")
 
     def current_icon_path(self) -> str:
         """Resolve the app icon: user-chosen (settings) or the bundled energy.ico."""
@@ -376,8 +343,9 @@ class AppContext:
         self._closed = True
         self._auto_backup_on_exit()
         try:
-            # Fold the write-ahead log into kahraba.db so the single .db file is complete when
-            # the user copies it, and let SQLite refresh its query-planner statistics.
+            # Fold the write-ahead log into the database file so the single .db file is
+            # complete when the user copies it, and let SQLite refresh its query-planner
+            # statistics.
             self.conn.commit()
             self.conn.execute("PRAGMA optimize")
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

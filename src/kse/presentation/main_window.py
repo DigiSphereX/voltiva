@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
 from .. import __version__
 from . import theme
 from .topbar import TopBar
-from .widgets import digits
 
 from .pages.analytics import AnalyticsPage
 from .pages.dashboard import DashboardPage
@@ -445,7 +444,7 @@ class MainWindow(QMainWindow):
         page_name = self.tr(label_key) if key != "invoice_detail" else self.tr("iv_no")
         db_name = Path(str(self.app.db_path)).name
         self.status_lbl.setText(
-            self.tr("status_context", page=page_name, count=digits(str(count)), db=db_name))
+            self.tr("status_context", page=page_name, count=str(count), db=db_name))
 
     def apply_icon(self, path: str) -> None:
         icon = QIcon(path)

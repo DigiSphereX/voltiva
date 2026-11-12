@@ -124,12 +124,23 @@ def _used_keys():
     return keys
 
 
-def test_every_translation_key_used_in_code_exists_in_english_and_arabic():
+def test_every_translation_key_used_in_code_exists_in_english():
     from kse.presentation import i18n
-    missing_en = {k: f for k, f in _used_keys().items() if k not in i18n._STRINGS["en"]}
-    missing_ar = {k: f for k, f in _used_keys().items() if k not in i18n._STRINGS["ar"]}
-    assert not missing_en, f"missing in EN: {missing_en}"
-    assert not missing_ar, f"missing in AR: {missing_ar}"
+    used = _used_keys()
+    missing = {k: f for k, f in used.items() if k not in i18n._STRINGS["en"]}
+    assert not missing, f"missing in EN: {missing}"
+
+
+def test_missing_translations_fall_back_to_english():
+    """Non-English tables are intentionally partial; tr() must fall back cleanly."""
+    from kse.presentation import i18n
+    used = _used_keys()
+    en = i18n.I18n("en")
+    for lang in i18n.LANGS[1:]:
+        tr = i18n.I18n(lang)
+        for key in used:
+            if key not in i18n._STRINGS[lang]:
+                assert tr.tr(key) == en.tr(key), (lang, key)
 
 
 def test_format_placeholders_match_between_languages():
@@ -149,7 +160,7 @@ def test_dynamic_payment_error_keys_exist():
     from kse.domain.errors import PaymentError
     from kse.presentation import i18n
     for reason in PaymentError._MESSAGES:
-        for lang in ("en", "ar"):
+        for lang in i18n.LANGS:
             assert f"err_payment_{reason}" in i18n._STRINGS[lang], (reason, lang)
 
 
@@ -167,3 +178,37 @@ def test_no_duplicate_keys_in_any_dictionary_literal_of_i18n():
                         dups.append((k.value, k.lineno))
                     seen.add(k.value)
     assert not dups, dups
+
+
+def test_no_arabic_script_in_any_user_facing_string():
+    """Every shipped interface language is written in its own script.
+
+    Arabic is not an interface language any more (Voltiva 1.2), so no dictionary,
+    enum label or calculation-step label may carry Arabic characters: they would
+    ship as untranslated leftovers in a menu, table or printed document.
+    """
+    from kse.presentation import i18n
+    arabic = re.compile(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]")
+
+    bad = []
+    for lang, table in i18n._STRINGS.items():
+        for key, text in table.items():
+            if arabic.search(str(text)):
+                bad.append((lang, key))
+    for lang, mapping in i18n._ENUM_LABELS.items():
+        for enum_cls, labels in mapping.items():
+            for value, text in labels.items():
+                if arabic.search(str(text)):
+                    bad.append((lang, f"{enum_cls.__name__}.{value}"))
+    for key, text in i18n._STEP_LABEL_KEYS.items():
+        if arabic.search(str(text)):
+            bad.append(("step_label", key))
+    assert not bad, bad[:20]
+
+
+def test_no_language_is_registered_as_rtl():
+    """The layout is LTR-only; a lingering RTL language would flip every form."""
+    from kse.presentation import i18n
+    assert i18n.RTL_LANGS == frozenset() or not i18n.RTL_LANGS
+    for lang in i18n.LANGS:
+        assert not i18n.I18n(lang).rtl, lang

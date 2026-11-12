@@ -8,7 +8,7 @@ if SRC not in sys.path:
 
 
 def _install_crash_handling() -> None:
-    """Log every unhandled exception to ~/.kahraba_smart/voltiva.log and show a dialog.
+    """Log every unhandled exception to ~/.voltiva/voltiva.log and show a dialog.
 
     PyQt6 calls ``qFatal`` (hard abort, no message) when a slot raises and no
     ``sys.excepthook`` is installed - the window would just vanish.

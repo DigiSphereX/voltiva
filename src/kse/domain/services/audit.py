@@ -1,5 +1,5 @@
 """AuditEngine — records every calculation so the chain can always be rebuilt
-(spec §28). "لماذا كانت الفاتورة 35,840 دينار؟" — answerable & reproducible.
+(spec §28). "Why was this invoice 35,840 dinars?" — answerable & reproducible.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ class AuditEngine:
     ) -> dict[str, Any]:
         """Produce a dict ready to persist as one AuditLogs row."""
         steps_flat = [
-            {"label": s.label_ar, "value": s.value_display, "detail": s.detail}
+            {"label": s.label, "value": s.value_display, "detail": s.detail}
             for s in calc.steps
         ]
         details = {

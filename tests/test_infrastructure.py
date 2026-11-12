@@ -72,7 +72,7 @@ class TestRepositories:
 
         repos = build_repositories(mem_db)
         sched = TariffSchedule(
-            name_ar="تعرفة", subscriber_type=SubscriberType.RESIDENTIAL, method=TariffMethod.PROGRESSIVE,
+            name="Tariff", subscriber_type=SubscriberType.RESIDENTIAL, method=TariffMethod.PROGRESSIVE,
             effective_from=dt.date(2024, 1, 1), source=DataSource.ESTIMATED,
             tiers=[
                 TariffTier(tier_no=1, from_kwh=Decimal("0"), to_kwh=Decimal("1500"), rate_per_kwh=Decimal("10")),
@@ -102,7 +102,7 @@ class TestRepositories:
             previous_date=dt.date(2024, 2, 1), current_date=dt.date(2024, 3, 15),
             consumption_kwh=Decimal("3584"), adjusted_kwh=Decimal("3584"),
         )
-        charge = InvoiceCharge(name="رسوم", category=ChargeCategory.FIXED_FEE, amount=Money.of(1000))
+        charge = InvoiceCharge(name="Fee", category=ChargeCategory.FIXED_FEE, amount=Money.of(1000))
         repos["invoices"].save(inv, reading, [charge])
         mem_db.commit()
 

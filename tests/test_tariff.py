@@ -67,8 +67,8 @@ class TestResolution:
         s1 = make_schedule(name="Old", effective_from=dt.date(2023, 1, 1), effective_to=dt.date(2024, 1, 1))
         s2 = make_schedule(name="New", effective_from=dt.date(2024, 1, 1))
         resolved = TariffEngine.resolve([s1, s2], SubscriberType.RESIDENTIAL, dt.date(2024, 6, 1))
-        assert resolved.name_ar == "New"
-        assert TariffEngine.resolve([s1, s2], SubscriberType.RESIDENTIAL, dt.date(2023, 6, 1)).name_ar == "Old"
+        assert resolved.name == "New"
+        assert TariffEngine.resolve([s1, s2], SubscriberType.RESIDENTIAL, dt.date(2023, 6, 1)).name == "Old"
 
     def test_inactive_ignored(self):
         s = make_schedule(active=False)
@@ -149,7 +149,7 @@ class TestServiceZone:
         smart = make_schedule(name="S", service_zone=ServiceZone.SMART_METER, effective_from=date(2024, 1, 1))
         got = TariffEngine.resolve([trad, smart], SubscriberType.RESIDENTIAL, date(2024, 6, 1),
                                    service_zone=ServiceZone.SMART_METER)
-        assert got.name_ar == "S"
+        assert got.name == "S"
         got2 = TariffEngine.resolve([trad, smart], SubscriberType.RESIDENTIAL, date(2024, 6, 1),
                                     service_zone=ServiceZone.TRADITIONAL)
         assert got2.service_zone == ServiceZone.TRADITIONAL

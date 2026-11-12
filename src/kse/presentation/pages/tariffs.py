@@ -16,7 +16,7 @@ from ...domain.money import Money
 from .. import theme
 from ..widgets import (
     DataTable, PageHeader, RtlAlignDelegate, Section, action_cell, chip_cell, configure_table,
-    date_edit, danger_small_button, digits, error_text, fit_action_column, form_label, muted,
+    date_edit, danger_small_button, error_text, fit_action_column, form_label, muted,
     primary_button, small_button,
 )
 
@@ -80,10 +80,8 @@ class TariffDialog(QDialog):
         self.setWindowTitle(self.tr("tf_save") if schedule else self.tr("tf_new_btn"))
         self.setMinimumWidth(660)
 
-        self.name_ar = QLineEdit(schedule.name_ar if schedule else "")
-        self.name_ar.setToolTip(self.tr("tt_tf_name_ar"))
-        self.name_en = QLineEdit(schedule.name_en if schedule else "")
-        self.name_en.setToolTip(self.tr("tt_tf_name_en"))
+        self.name = QLineEdit(schedule.name if schedule else "")
+        self.name.setToolTip(self.tr("tt_tf_name"))
         self.type_combo = QComboBox()
         self.type_combo.setToolTip(self.tr("tt_tf_type"))
         for t in SubscriberType:
@@ -147,8 +145,7 @@ class TariffDialog(QDialog):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for label, widget in (
-            (self.tr("tf_name_ar"), self.name_ar),
-            (self.tr("tf_name_en"), self.name_en),
+            (self.tr("tf_name"), self.name),
             (self.tr("tf_type"), self.type_combo),
             (self.tr("tf_method"), self.method_combo),
             (self.tr("tf_service_zone"), self.zone_combo),
@@ -221,7 +218,7 @@ class TariffDialog(QDialog):
             for tier in schedule.tiers:
                 self._add_tier_row(str(tier.from_kwh), str(tier.to_kwh) if tier.to_kwh is not None else "", str(tier.rate_per_kwh))
             for fee in schedule.fixed_fees:
-                self._add_fee_row(fee.name_ar, fee.category.value, str(fee.amount.raw))
+                self._add_fee_row(fee.name, fee.category.value, str(fee.amount.raw))
         else:
             self._add_tier_row("0", "", "10")
 
@@ -297,7 +294,7 @@ class TariffDialog(QDialog):
             except Exception:
                 continue
             fees.append(TariffFee(
-                name_ar=name,
+                name=name,
                 category=combo.currentData() or ChargeCategory.FIXED_FEE,
                 amount=money,
                 reason=self.tr("audit_tariff_reason"),
@@ -307,8 +304,7 @@ class TariffDialog(QDialog):
     def _save(self) -> None:
         try:
             schedule = self._schedule or TariffSchedule()
-            schedule.name_ar = self.name_ar.text().strip() or "Tariff"
-            schedule.name_en = self.name_en.text().strip()
+            schedule.name = self.name.text().strip() or "Tariff"
             schedule.subscriber_type = self.type_combo.currentData()
             schedule.method = self.method_combo.currentData()
             schedule.service_zone = self.zone_combo.currentData()
@@ -369,8 +365,8 @@ class TariffsPage(QWidget):
         self.table.itemDoubleClicked.connect(self._edit_selected)
 
     def _localized_name(self, s: TariffSchedule) -> str:
-        """Show the Arabic name for the Arabic UI, the English name everywhere else."""
-        return s.name_ar if self.app.i18n.lang == "ar" else (s.name_en or s.name_ar)
+        """Display name for the schedule row (single shared name column)."""
+        return s.name
 
     def refresh(self) -> None:
         schedules = self.app.tariffs.list(include_inactive=True)
@@ -389,7 +385,7 @@ class TariffsPage(QWidget):
                     self.app.i18n.enum_label(s.subscriber_type),
                     self.app.i18n.enum_label(s.method),
                     self.app.i18n.enum_label(s.service_zone),
-                    digits(s.effective_from.strftime("%d/%m/%Y")),
+                    s.effective_from.strftime("%d/%m/%Y"),
                 )
                 for c, text in enumerate(values):
                     item = QTableWidgetItem(text)
@@ -414,7 +410,7 @@ class TariffsPage(QWidget):
                 fit_action_column(self.table, 6, actions)
         finally:
             self.table.setUpdatesEnabled(True)
-        self.count_lbl.setText(self.tr("tf_showing", n=digits(str(len(schedules)))))
+        self.count_lbl.setText(self.tr("tf_showing", n=str(len(schedules))))
 
     def _actions_cell(self, schedule_id: int) -> QWidget:
         edit_btn = small_button(self.tr("edit"))

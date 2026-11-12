@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 
 from .. import theme
 from ..charts import StatCard
-from ..widgets import CardGrid, DataTable, chip_cell, configure_table, digits, money_display
+from ..widgets import CardGrid, DataTable, chip_cell, configure_table, money_display
 from ...domain.enums import PaymentStatus
 from ...domain.money import fmt_quantity
 
@@ -159,22 +159,22 @@ class DashboardPage(QWidget):
 
     def refresh(self) -> None:
         stats = self.app.analytics.dashboard()
-        self.cards[0].set_value(digits(str(stats["total_invoices"])))
-        self.cards[1].set_value(f"{digits(fmt_quantity(stats['total_kwh']))} {self.tr('unit_kwh')}")
+        self.cards[0].set_value(str(stats["total_invoices"]))
+        self.cards[1].set_value(f"{fmt_quantity(stats['total_kwh'])} {self.tr('unit_kwh')}")
         self.cards[2].set_value(money_display(stats["total_amount"]))
         self.cards[3].set_value(money_display(stats["total_paid"]))
         self.cards[4].set_value(money_display(stats["total_unpaid"]))
-        self.cards[5].set_value(digits(str(stats["unpaid_count"])))
+        self.cards[5].set_value(str(stats["unpaid_count"]))
         self.cards[6].set_value(money_display(stats["avg_invoice"]))
-        self.cards[7].set_value(f"{digits(stats['cost_per_kwh'])} / {self.tr('unit_kwh')}")
+        self.cards[7].set_value(f"{str(stats['cost_per_kwh'])} / {self.tr('unit_kwh')}")
 
         c = self.app.repos["invoices"].list_recent(limit=5)
         # Text was red/green on the blue-purple hero (contrast 1.1-2.3:1, unreadable).
         # Now: white text on the QSS dark overlay, with the status colour as a pale dot.
-        rate = digits(f"{float(stats['collection_rate']):.1f}")
+        rate = f"{float(stats['collection_rate']):.1f}"
         self._set_hero_chip(
             self.unpaid_chip, "#FFB4B2",
-            f"{self.tr('dash_unpaid_count')}: {digits(str(stats['unpaid_count']))} — {money_display(stats['total_unpaid'])}")
+            f"{self.tr('dash_unpaid_count')}: {str(stats['unpaid_count'])} — {money_display(stats['total_unpaid'])}")
         self._set_hero_chip(self.rate_chip, "#8DF0C8", f"{self.tr('dash_collection_rate')}: {rate}%")
 
         self._fill_recent(c)
@@ -199,8 +199,8 @@ class DashboardPage(QWidget):
                 chip_text, chip_color = self.tr("status_unpaid"), c["danger"]
             cells = [
                 (inv.invoice_no or "—", left),
-                (digits(inv.issue_date.strftime("%d/%m/%Y")), left),
-                (inv.subscriber_name or digits(inv.account_no), left),
+                (inv.issue_date.strftime("%d/%m/%Y"), left),
+                (inv.subscriber_name or inv.account_no, left),
                 (money_display(inv.total_due), right),
             ]
             for col, (text, align) in enumerate(cells):
